@@ -42,9 +42,7 @@
     flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);
     color:var(--wit);font-family:var(--ui);font-size:13px;padding:8px 10px;border-radius:3px;
   }
-  .verbinding input.smal{flex:0 0 110px;min-width:0}
   .verbinding input::placeholder{color:rgba(255,255,255,.45)}
-  body[data-ingesteld="ja"] #webhook{flex:0 0 190px;opacity:.55}
   .verbinding input:focus{outline:2px solid var(--goud);outline-offset:1px}
   .verbinding button{
     background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.25);
@@ -168,8 +166,6 @@
   <h1>Programmabureau PRM <span>&middot; overlegruimte</span></h1>
   <div class="verbinding">
     <input id="webhook" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/chat" aria-label="Webhook-URL van de chat trigger">
-    <input id="gebruiker" class="smal" type="text" autocomplete="username" placeholder="gebruiker" aria-label="Gebruikersnaam, alleen bij Basic Auth">
-    <input id="wachtwoord" class="smal" type="password" autocomplete="current-password" placeholder="wachtwoord" aria-label="Wachtwoord, alleen bij Basic Auth">
     <button id="nieuw" type="button">Nieuw gesprek</button>
   </div>
 </header>
@@ -196,27 +192,15 @@
 (function () {
   "use strict";
 
-  /* ------------------------------------------------------------------ *
-   *  INSTELLINGEN                                                       *
-   *                                                                     *
-   *  Vul STANDAARD_WEBHOOK in als je de URL niet elke keer wilt plakken. *
-   *  Let op: staat deze repository op public, dan is alles wat hier      *
-   *  staat door iedereen te lezen. Laat hem leeg en gebruik het veld     *
-   *  bovenin (of ?webhook=... in de adresbalk) als je dat liever niet    *
-   *  hebt.                                                              *
-   * ------------------------------------------------------------------ */
-  var STANDAARD_WEBHOOK = "";
-
   var draad = document.getElementById("draad");
   var invoer = document.getElementById("bericht");
   var knop = document.getElementById("versturen");
   var webhookVeld = document.getElementById("webhook");
   var sessie = maakSessieId();
 
-  // Volgorde: ?webhook=... in de adresbalk wint van de vaste instelling.
+  // Webhook mag ook via ?webhook=... in de adresbalk meekomen.
   var uitUrl = new URLSearchParams(location.search).get("webhook");
-  webhookVeld.value = uitUrl || STANDAARD_WEBHOOK || "";
-  if (webhookVeld.value) { document.body.setAttribute("data-ingesteld", "ja"); }
+  if (uitUrl) { webhookVeld.value = uitUrl; }
 
   function maakSessieId() {
     if (window.crypto && crypto.randomUUID) { return crypto.randomUUID(); }
@@ -453,16 +437,9 @@
     toonVraag(tekst);
     toonWachten();
 
-    var kopregels = { "Content-Type": "application/json" };
-    var gebruiker = document.getElementById("gebruiker").value.trim();
-    var wachtwoord = document.getElementById("wachtwoord").value;
-    if (gebruiker || wachtwoord) {
-      kopregels.Authorization = "Basic " + btoa(gebruiker + ":" + wachtwoord);
-    }
-
     fetch(url, {
       method: "POST",
-      headers: kopregels,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "sendMessage", sessionId: sessie, chatInput: tekst })
     })
       .then(function (res) {
@@ -475,16 +452,9 @@
         toonAntwoord(d.forum, d.output || d.text || "");
       })
       .catch(function (fout) {
-        var uitleg = fout.message + ". ";
-        if (location.protocol === "https:" && /^http:/i.test(url)) {
-          uitleg += "Deze pagina draait op https en de webhook op http. Browsers blokkeren dat. " +
-                    "Zet n8n achter https, of open deze pagina lokaal via http.";
-        } else {
-          uitleg += "Controleer of de workflow actief staat, of de URL de production-URL is " +
-                    "(niet de test-URL), en of bij de Chat Trigger onder Allowed Origins (CORS) " +
-                    location.origin + " staat.";
-        }
-        toonStoring("Het antwoord kwam niet binnen", uitleg);
+        toonStoring("Het antwoord kwam niet binnen",
+          fout.message + ". Controleer of de workflow actief staat, of de URL klopt, en of bij de " +
+          "Chat Trigger onder Allowed Origins (CORS) de plek staat waar deze pagina draait.");
       })
       .then(function () {
         knop.disabled = false;
