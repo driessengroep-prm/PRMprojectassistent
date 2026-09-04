@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Programmabureau PRM &middot; overlegruimte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --inkt:#101330;
+    --papier:#FAFAFB;
+    --wit:#FFFFFF;
+    --rood:#E74266;
+    --teal:#20B69E;
+    --goud:#C9A063;
+    --lijn:#DFE2EA;
+    --grijs:#5B6076;
+    --ui:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --doc:"Source Serif 4",Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--papier);color:var(--inkt);
+    font-family:var(--ui);font-size:16px;line-height:1.5;
+    display:flex;flex-direction:column;
+  }
+
+  /* ---------- kop ---------- */
+  header{
+    background:var(--inkt);color:var(--wit);
+    padding:14px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+  }
+  header h1{
+    font-size:17px;font-weight:600;margin:0;letter-spacing:-.01em;
+  }
+  header h1 span{color:var(--goud);font-weight:400}
+  .verbinding{margin-left:auto;display:flex;gap:8px;align-items:center;flex:1 1 380px;min-width:260px}
+  .verbinding input{
+    flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);
+    color:var(--wit);font-family:var(--ui);font-size:13px;padding:8px 10px;border-radius:3px;
+  }
+  .verbinding input.smal{flex:0 0 110px;min-width:0}
+  .verbinding input::placeholder{color:rgba(255,255,255,.45)}
+  body[data-ingesteld="ja"] #webhook{flex:0 0 190px;opacity:.55}
+  .verbinding input:focus{outline:2px solid var(--goud);outline-offset:1px}
+  .verbinding button{
+    background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.25);
+    font-family:var(--ui);font-size:13px;padding:8px 12px;border-radius:3px;cursor:pointer;
+  }
+  .verbinding button:hover{color:var(--wit);border-color:var(--wit)}
+
+  /* ---------- draad ---------- */
+  main{flex:1;overflow-y:auto;padding:32px 20px 40px}
+  .draad{max-width:760px;margin:0 auto}
+
+  .welkom{
+    border-left:3px solid var(--goud);padding:4px 0 4px 18px;margin-bottom:36px;
+    font-family:var(--doc);font-size:17px;line-height:1.6;color:var(--grijs);
+  }
+
+  .vraag{
+    background:var(--teal);color:var(--wit);border-radius:3px;
+    padding:12px 16px;margin:0 0 28px auto;max-width:78%;width:fit-content;
+    font-size:15.5px;white-space:pre-wrap;
+  }
+
+  /* ---------- overlegspoor ---------- */
+  .overleg{margin:0 0 28px;border-left:2px solid var(--lijn);padding-left:24px}
+  .overleg > .kop{
+    position:relative;display:flex;align-items:baseline;gap:10px;margin-bottom:4px;
+    font-size:13px;color:var(--grijs);cursor:pointer;user-select:none;
+  }
+  .overleg > .kop::before{
+    content:"";position:absolute;left:-29px;top:6px;width:9px;height:9px;border-radius:50%;
+    background:var(--grijs);
+  }
+  .overleg > .kop:focus-visible{outline:2px solid var(--inkt);outline-offset:3px}
+  .overleg > .kop strong{color:var(--inkt);font-weight:600}
+  .overleg > .kop .pijl{margin-left:auto;font-size:11px;white-space:nowrap}
+  .overleg[data-open="nee"] .inhoud{display:none}
+
+  .stap{position:relative;padding:16px 0 2px}
+  .stap::before{
+    content:"";position:absolute;left:-30px;top:22px;width:11px;height:11px;border-radius:50%;
+    background:var(--rood);border:2px solid var(--papier);
+  }
+  .stap .naam{font-size:14.5px;font-weight:600}
+  .stap .rol{font-size:12.5px;color:var(--grijs);margin-bottom:8px}
+
+  .blok{border:1px solid var(--lijn);background:var(--wit);border-radius:3px;margin-bottom:8px}
+  .blok > summary{
+    list-style:none;cursor:pointer;padding:9px 12px;font-size:12.5px;color:var(--grijs);
+    display:flex;gap:8px;align-items:center;
+  }
+  .blok > summary::-webkit-details-marker{display:none}
+  .blok > summary::before{content:"+";font-weight:700;color:var(--rood);width:10px}
+  .blok[open] > summary::before{content:"\2013"}
+  .blok[open] > summary{border-bottom:1px solid var(--lijn)}
+  .blok .tekst{padding:2px 14px 12px}
+
+  /* ---------- advies ---------- */
+  .advies{margin-bottom:40px}
+  .advies .afzender{
+    font-size:12.5px;font-weight:600;color:var(--rood);
+    padding-bottom:6px;border-bottom:2px solid var(--rood);display:inline-block;margin-bottom:14px;
+  }
+
+  /* ---------- documenttekst ---------- */
+  .doc{font-family:var(--doc);font-size:16.5px;line-height:1.66}
+  .doc h1,.doc h2,.doc h3{font-family:var(--ui);line-height:1.3;margin:1.4em 0 .5em}
+  .doc h1{font-size:20px}.doc h2{font-size:17.5px}.doc h3{font-size:15.5px}
+  .doc h1:first-child,.doc h2:first-child,.doc h3:first-child{margin-top:.2em}
+  .doc p{margin:0 0 .85em}
+  .doc ul,.doc ol{margin:0 0 .9em;padding-left:1.3em}
+  .doc li{margin-bottom:.3em}
+  .doc code{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.87em;
+    background:#EFF1F5;padding:1px 4px;border-radius:2px;
+  }
+  .doc strong{font-weight:600}
+  .doc hr{border:0;border-top:1px solid var(--lijn);margin:1.4em 0}
+
+  /* ---------- wachten ---------- */
+  .wachten{
+    border-left:2px solid var(--lijn);padding:4px 0 4px 24px;margin-bottom:28px;
+    font-size:14px;color:var(--grijs);
+  }
+  .wachten b{color:var(--inkt);font-weight:600}
+  .puls{
+    display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--rood);
+    margin-right:8px;animation:puls 1.4s ease-in-out infinite;
+  }
+  @keyframes puls{0%,100%{opacity:.25}50%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.puls{animation:none;opacity:.7}}
+
+  .storing{
+    border-left:3px solid var(--rood);background:#FDEEF1;padding:12px 16px;
+    margin-bottom:28px;font-size:14.5px;border-radius:0 3px 3px 0;
+  }
+  .storing b{display:block;margin-bottom:2px}
+
+  /* ---------- invoer ---------- */
+  footer{border-top:1px solid var(--lijn);background:var(--wit);padding:14px 20px}
+  .invoer{max-width:760px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
+  .invoer textarea{
+    flex:1;resize:none;font-family:var(--ui);font-size:15.5px;line-height:1.5;
+    border:1px solid var(--lijn);border-radius:3px;padding:11px 13px;min-height:48px;max-height:180px;
+    color:var(--inkt);background:var(--wit);
+  }
+  .invoer textarea:focus{outline:2px solid var(--rood);outline-offset:-1px;border-color:transparent}
+  .invoer button{
+    background:var(--rood);color:var(--wit);border:0;border-radius:3px;
+    font-family:var(--ui);font-size:15px;font-weight:600;padding:13px 22px;cursor:pointer;
+  }
+  .invoer button:hover:not(:disabled){background:#D93A5C}
+  .invoer button:disabled{background:var(--lijn);color:var(--grijs);cursor:not-allowed}
+  .invoer button:focus-visible{outline:2px solid var(--inkt);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Programmabureau PRM <span>&middot; overlegruimte</span></h1>
+  <div class="verbinding">
+    <input id="webhook" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/chat" aria-label="Webhook-URL van de chat trigger">
+    <input id="gebruiker" class="smal" type="text" autocomplete="username" placeholder="gebruiker" aria-label="Gebruikersnaam, alleen bij Basic Auth">
+    <input id="wachtwoord" class="smal" type="password" autocomplete="current-password" placeholder="wachtwoord" aria-label="Wachtwoord, alleen bij Basic Auth">
+    <button id="nieuw" type="button">Nieuw gesprek</button>
+  </div>
+</header>
+
+<main>
+  <div class="draad" id="draad">
+    <div class="welkom">
+      Hi PRM-collega. Vertel waar je idee over gaat, dan lopen we samen de initiatiefase door &mdash; van vaag idee
+      naar een voorstel dat de GO/NO-GO aankan. Het overleg met de specialisten kun je per beurt openklappen.
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="invoer">
+    <textarea id="bericht" rows="1" placeholder="Waar kan ik je mee helpen?" aria-label="Jouw bericht"></textarea>
+    <button id="versturen" type="button">Versturen</button>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ------------------------------------------------------------------ *
+   *  INSTELLINGEN                                                       *
+   *                                                                     *
+   *  Vul STANDAARD_WEBHOOK in als je de URL niet elke keer wilt plakken. *
+   *  Let op: staat deze repository op public, dan is alles wat hier      *
+   *  staat door iedereen te lezen. Laat hem leeg en gebruik het veld     *
+   *  bovenin (of ?webhook=... in de adresbalk) als je dat liever niet    *
+   *  hebt.                                                              *
+   * ------------------------------------------------------------------ */
+  var STANDAARD_WEBHOOK = "";
+
+  var draad = document.getElementById("draad");
+  var invoer = document.getElementById("bericht");
+  var knop = document.getElementById("versturen");
+  var webhookVeld = document.getElementById("webhook");
+  var sessie = maakSessieId();
+
+  // Volgorde: ?webhook=... in de adresbalk wint van de vaste instelling.
+  var uitUrl = new URLSearchParams(location.search).get("webhook");
+  webhookVeld.value = uitUrl || STANDAARD_WEBHOOK || "";
+  if (webhookVeld.value) { document.body.setAttribute("data-ingesteld", "ja"); }
+
+  function maakSessieId() {
+    if (window.crypto && crypto.randomUUID) { return crypto.randomUUID(); }
+    return "s-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+  }
+
+  // ---------------------------------------------------------------- markdown
+  function ontsnap(t) {
+    return String(t)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function inline(t) {
+    return t
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  }
+
+  function naarHtml(ruw) {
+    var regels = ontsnap(ruw || "").split(/\r?\n/);
+    var uit = [];
+    var lijst = null;   // "ul" of "ol"
+    var alinea = [];
+
+    function sluitAlinea() {
+      if (alinea.length) { uit.push("<p>" + inline(alinea.join(" ")) + "</p>"); alinea = []; }
+    }
+    function sluitLijst() {
+      if (lijst) { uit.push("</" + lijst + ">"); lijst = null; }
+    }
+
+    regels.forEach(function (regel) {
+      var r = regel.trim();
+
+      if (!r) { sluitAlinea(); sluitLijst(); return; }
+
+      var kop = r.match(/^(#{1,6})\s+(.*)$/);
+      if (kop) {
+        sluitAlinea(); sluitLijst();
+        var niveau = Math.min(kop[1].length, 3);
+        uit.push("<h" + niveau + ">" + inline(kop[2]) + "</h" + niveau + ">");
+        return;
+      }
+
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(r)) { sluitAlinea(); sluitLijst(); uit.push("<hr>"); return; }
+
+      var punt = r.match(/^[-*\u2022]\s+(.*)$/);
+      if (punt) {
+        sluitAlinea();
+        if (lijst !== "ul") { sluitLijst(); uit.push("<ul>"); lijst = "ul"; }
+        uit.push("<li>" + inline(punt[1]) + "</li>");
+        return;
+      }
+
+      var genummerd = r.match(/^\d+[.)]\s+(.*)$/);
+      if (genummerd) {
+        sluitAlinea();
+        if (lijst !== "ol") { sluitLijst(); uit.push("<ol>"); lijst = "ol"; }
+        uit.push("<li>" + inline(genummerd[1]) + "</li>");
+        return;
+      }
+
+      if (lijst) {
+        // vervolgregel binnen een opsomming
+        uit[uit.length - 1] = uit[uit.length - 1].replace(/<\/li>$/, " " + inline(r) + "</li>");
+        return;
+      }
+      alinea.push(r);
+    });
+
+    sluitAlinea(); sluitLijst();
+    return uit.join("");
+  }
+
+  // ---------------------------------------------------------------- opbouw
+  function element(tag, klasse, html) {
+    var el = document.createElement(tag);
+    if (klasse) { el.className = klasse; }
+    if (html !== undefined) { el.innerHTML = html; }
+    return el;
+  }
+
+  function toonVraag(tekst) {
+    var el = element("div", "vraag");
+    el.textContent = tekst;
+    draad.appendChild(el);
+    naarBeneden();
+  }
+
+  function toonWachten() {
+    var el = element("div", "wachten");
+    el.id = "wachtblok";
+    el.innerHTML = '<span class="puls"></span>De regisseur denkt na en overlegt zo nodig met de specialisten. ' +
+                   'Dat kan bij een uitgebreide vraag <b>een minuut of langer</b> duren.';
+    draad.appendChild(el);
+    naarBeneden();
+  }
+
+  function wegWachten() {
+    var el = document.getElementById("wachtblok");
+    if (el) { el.remove(); }
+  }
+
+  function toonStoring(kop, uitleg) {
+    wegWachten();
+    var el = element("div", "storing");
+    el.innerHTML = "<b>" + ontsnap(kop) + "</b>" + ontsnap(uitleg);
+    draad.appendChild(el);
+    naarBeneden();
+  }
+
+  function knip(tekst, lengte) {
+    var t = String(tekst || "").replace(/\s+/g, " ").trim();
+    return t.length > lengte ? t.slice(0, lengte) + "\u2026" : t;
+  }
+
+  function bouwOverleg(stappen) {
+    // stappen: alle forumregels behalve het slotadvies
+    var rondes = {};
+    var volgorde = [];
+    stappen.forEach(function (regel) {
+      var sleutel = String(regel.ronde);
+      if (!rondes[sleutel]) { rondes[sleutel] = {}; volgorde.push(sleutel); }
+      rondes[sleutel][regel.type] = regel;
+    });
+    if (!volgorde.length) { return null; }
+
+    var wrap = element("section", "overleg");
+    wrap.setAttribute("data-open", "nee");
+
+    var namen = volgorde.map(function (s) {
+      return (rondes[s].antwoord || rondes[s].opdracht).van !== "Regisseur"
+        ? (rondes[s].antwoord || rondes[s].opdracht).van
+        : (rondes[s].opdracht || {}).aan;
+    });
+
+    var kop = element("div", "kop");
+    kop.setAttribute("role", "button");
+    kop.setAttribute("tabindex", "0");
+    kop.innerHTML = "<strong>Overleg op de achtergrond</strong> " +
+                    ontsnap(namen.join(", ")) + '<span class="pijl">openklappen</span>';
+    wrap.appendChild(kop);
+
+    var inhoud = element("div", "inhoud");
+    volgorde.forEach(function (sleutel) {
+      var ronde = rondes[sleutel];
+      var opdracht = ronde.opdracht || {};
+      var antwoord = ronde.antwoord || {};
+      var naam = antwoord.van && antwoord.van !== "Regisseur" ? antwoord.van : opdracht.aan;
+
+      var stap = element("div", "stap");
+      stap.appendChild(element("div", "naam", ontsnap(naam || "Specialist")));
+      if (antwoord.rol || opdracht.rol) {
+        stap.appendChild(element("div", "rol", ontsnap(antwoord.rol || opdracht.rol)));
+      }
+
+      if (opdracht.tekst) {
+        var d1 = element("details", "blok");
+        d1.innerHTML = "<summary>Opdracht van de regisseur \u2014 " +
+                       ontsnap(knip(opdracht.tekst, 70)) + "</summary>" +
+                       '<div class="tekst doc">' + naarHtml(opdracht.tekst) + "</div>";
+        stap.appendChild(d1);
+      }
+      if (antwoord.tekst) {
+        var d2 = element("details", "blok");
+        d2.innerHTML = "<summary>Wat " + ontsnap(naam || "de specialist") + " terugstuurde \u2014 " +
+                       ontsnap(knip(antwoord.tekst, 70)) + "</summary>" +
+                       '<div class="tekst doc">' + naarHtml(antwoord.tekst) + "</div>";
+        stap.appendChild(d2);
+      }
+      inhoud.appendChild(stap);
+    });
+    wrap.appendChild(inhoud);
+
+    function wissel() {
+      var open = wrap.getAttribute("data-open") === "ja";
+      wrap.setAttribute("data-open", open ? "nee" : "ja");
+      kop.querySelector(".pijl").textContent = open ? "openklappen" : "dichtklappen";
+    }
+    kop.addEventListener("click", wissel);
+    kop.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); wissel(); }
+    });
+
+    return wrap;
+  }
+
+  function toonAntwoord(forum, losseTekst) {
+    wegWachten();
+
+    if (Array.isArray(forum) && forum.length) {
+      var stappen = forum.filter(function (r) { return r.type !== "advies"; });
+      var advies = forum.filter(function (r) { return r.type === "advies"; }).pop();
+
+      var overleg = bouwOverleg(stappen);
+      if (overleg) { draad.appendChild(overleg); }
+
+      var blok = element("div", "advies");
+      blok.appendChild(element("div", "afzender", "Regisseur"));
+      blok.appendChild(element("div", "doc", naarHtml(advies ? advies.tekst : losseTekst)));
+      draad.appendChild(blok);
+    } else {
+      var enkel = element("div", "advies");
+      enkel.appendChild(element("div", "afzender", "Regisseur"));
+      enkel.appendChild(element("div", "doc", naarHtml(losseTekst)));
+      draad.appendChild(enkel);
+    }
+    naarBeneden();
+  }
+
+  function naarBeneden() {
+    var main = document.querySelector("main");
+    main.scrollTop = main.scrollHeight;
+  }
+
+  // ---------------------------------------------------------------- versturen
+  function versturen() {
+    var tekst = invoer.value.trim();
+    if (!tekst) { return; }
+
+    var url = webhookVeld.value.trim();
+    if (!url) {
+      toonStoring("Nog geen webhook ingesteld",
+        "Plak rechtsboven de production-URL van de Chat Trigger. Die vind je in n8n op de node " +
+        "'When chat message received', onder Chat URL.");
+      webhookVeld.focus();
+      return;
+    }
+
+    invoer.value = "";
+    invoer.style.height = "auto";
+    knop.disabled = true;
+    toonVraag(tekst);
+    toonWachten();
+
+    var kopregels = { "Content-Type": "application/json" };
+    var gebruiker = document.getElementById("gebruiker").value.trim();
+    var wachtwoord = document.getElementById("wachtwoord").value;
+    if (gebruiker || wachtwoord) {
+      kopregels.Authorization = "Basic " + btoa(gebruiker + ":" + wachtwoord);
+    }
+
+    fetch(url, {
+      method: "POST",
+      headers: kopregels,
+      body: JSON.stringify({ action: "sendMessage", sessionId: sessie, chatInput: tekst })
+    })
+      .then(function (res) {
+        if (!res.ok) { throw new Error("n8n antwoordde met status " + res.status); }
+        return res.json();
+      })
+      .then(function (data) {
+        var d = Array.isArray(data) ? (data[0] || {}) : data;
+        if (d.json) { d = d.json; }
+        toonAntwoord(d.forum, d.output || d.text || "");
+      })
+      .catch(function (fout) {
+        var uitleg = fout.message + ". ";
+        if (location.protocol === "https:" && /^http:/i.test(url)) {
+          uitleg += "Deze pagina draait op https en de webhook op http. Browsers blokkeren dat. " +
+                    "Zet n8n achter https, of open deze pagina lokaal via http.";
+        } else {
+          uitleg += "Controleer of de workflow actief staat, of de URL de production-URL is " +
+                    "(niet de test-URL), en of bij de Chat Trigger onder Allowed Origins (CORS) " +
+                    location.origin + " staat.";
+        }
+        toonStoring("Het antwoord kwam niet binnen", uitleg);
+      })
+      .then(function () {
+        knop.disabled = false;
+        invoer.focus();
+      });
+  }
+
+  knop.addEventListener("click", versturen);
+  invoer.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); versturen(); }
+  });
+  invoer.addEventListener("input", function () {
+    invoer.style.height = "auto";
+    invoer.style.height = Math.min(invoer.scrollHeight, 180) + "px";
+  });
+
+  document.getElementById("nieuw").addEventListener("click", function () {
+    sessie = maakSessieId();
+    draad.querySelectorAll(".vraag, .overleg, .advies, .storing, .wachten").forEach(function (el) { el.remove(); });
+    invoer.focus();
+  });
+
+  invoer.focus();
+})();
+</script>
+</body>
+</html>
