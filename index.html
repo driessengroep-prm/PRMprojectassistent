@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Programmabureau PRM &middot; overlegruimte</title>
+<title>Programmabureau PRM &middot; Projectenassistent</title>
 <link rel="icon" href="avatars/kop-groen.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +15,7 @@
     --goud:#D8A32F;
     --teal:#1C5A54;
     --creme:#FDF1E7;
-    --papier:#FBFAF8;
+    --papier:#FDF1E7;
     --wit:#FFFFFF;
     --inkt:#26302F;
     --grijs:#6B7877;
@@ -33,7 +33,7 @@
 
   /* ---------- kop ---------- */
   header{
-    background:var(--wit);border-bottom:1px solid var(--lijn);
+    background:var(--creme);border-bottom:1px solid var(--lijn);
     padding:12px 24px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;flex:none;
   }
   .merk{display:flex;gap:11px;align-items:center;min-width:0}
@@ -50,9 +50,9 @@
     font-family:var(--ui);font-size:13.5px;font-weight:500;
     padding:8px 16px;border-radius:999px;cursor:pointer;white-space:nowrap;
   }
-  .knop-licht:hover{border-color:var(--teal);background:var(--creme)}
+  .knop-licht:hover{border-color:var(--teal);background:var(--wit)}
   .knop-licht:focus-visible{outline:2px solid var(--koraal-diep);outline-offset:2px}
-  .knop-licht[aria-expanded="true"]{background:var(--creme);border-color:var(--goud)}
+  .knop-licht[aria-expanded="true"]{background:var(--wit);border-color:var(--goud)}
   #lade{display:none;padding:8px 13px;font-size:16px;line-height:1}
 
   /* ---------- instellingen ---------- */
@@ -73,7 +73,7 @@
   .werkblad{flex:1;display:flex;min-height:0}
 
   .zijbalk{
-    width:290px;flex:none;background:var(--wit);border-right:1px solid var(--lijn);
+    width:290px;flex:none;background:var(--creme);border-right:1px solid var(--lijn);
     display:flex;flex-direction:column;min-height:0;
   }
   .zijbalk .top{padding:14px 14px 10px;flex:none}
@@ -92,8 +92,8 @@
   .gesprek{
     display:flex;align-items:center;gap:2px;border-radius:10px;padding:2px 4px 2px 0;
   }
-  .gesprek:hover{background:var(--creme)}
-  .gesprek[data-actief="ja"]{background:var(--creme);box-shadow:inset 3px 0 0 var(--koraal)}
+  .gesprek:hover{background:var(--wit)}
+  .gesprek[data-actief="ja"]{background:var(--wit);box-shadow:inset 3px 0 0 var(--koraal)}
   .gesprek .titel{
     flex:1;min-width:0;text-align:left;background:none;border:0;cursor:pointer;
     font-family:var(--ui);font-size:13.5px;line-height:1.35;color:var(--inkt);
@@ -119,14 +119,21 @@
 
   /* ---------- welkom ---------- */
   main{flex:1;overflow-y:auto}
-  .hero{background:var(--creme);padding:44px 24px 0}
+  .hero{background:var(--creme);padding:40px 24px 0}
   body[data-gestart="ja"] .hero{display:none}
-  .hero-binnen{max-width:1000px;margin:0 auto;display:flex;gap:28px;align-items:flex-end}
-  .hero-tekst{flex:1 1 400px;padding-bottom:44px;min-width:0}
-  .hero h1{
-    font-size:clamp(26px,3.4vw,38px);line-height:1.15;font-weight:700;color:var(--koraal);
-    margin:0 0 18px;letter-spacing:-.02em;
+  /* De kop staat buiten de kolommen en loopt over de volle breedte, zodat
+     de zin op een regel past. De maat schaalt mee met het venster; onder
+     de 1100 pixels breekt hij alsnog af in plaats van buiten beeld te lopen. */
+  .hero-kop{
+    max-width:1100px;margin:0 auto 22px;
+    font-size:clamp(17px,2vw,28px);line-height:1.25;font-weight:700;
+    color:var(--koraal);letter-spacing:-.02em;
   }
+  .hero-binnen{max-width:1100px;margin:0 auto;display:flex;gap:28px;align-items:flex-end}
+  /* De tekst begint bovenaan; alleen Buddy staat op de onderlijn.
+     Zonder dit zakt de tekst mee naar beneden en valt er een gat
+     tussen de kop en de eerste alinea. */
+  .hero-tekst{flex:1 1 400px;align-self:flex-start;padding-bottom:44px;min-width:0}
   .hero p{margin:0 0 12px;color:#4A5654;font-size:16px;max-width:52ch}
   .hero p:last-child{margin-bottom:0}
   .hero-beeld{position:relative;flex:0 0 280px;height:280px;align-self:flex-end}
@@ -149,7 +156,7 @@
   .pop-40{width:40px;height:40px}
   .pop-34{width:34px;height:34px}
   .stapel{display:flex;align-items:center}
-  .stapel img{width:30px;height:30px;border:2px solid var(--papier);margin-left:-9px}
+  .stapel img{width:30px;height:30px;border:2px solid var(--wit);margin-left:-9px}
   .stapel img:first-child{margin-left:0}
 
   /* ---------- overleg ---------- */
@@ -238,12 +245,12 @@
   .storing b{display:block;margin-bottom:3px;color:var(--koraal-diep);font-weight:600}
 
   /* ---------- invoer ---------- */
-  footer{border-top:1px solid var(--lijn);background:var(--wit);padding:16px 24px;flex:none}
+  footer{border-top:1px solid var(--lijn);background:var(--creme);padding:16px 24px;flex:none}
   .invoer{max-width:820px;margin:0 auto;display:flex;gap:11px;align-items:flex-end}
   .invoer textarea{
     flex:1;resize:none;font-family:var(--ui);font-size:15.5px;line-height:1.55;
     border:1.5px solid var(--lijn);border-radius:22px;padding:12px 18px;
-    min-height:48px;max-height:180px;color:var(--inkt);background:var(--papier);
+    min-height:48px;max-height:180px;color:var(--inkt);background:var(--wit);
   }
   .invoer textarea:focus{outline:2px solid var(--goud);outline-offset:-1px;border-color:transparent}
   .invoer button{
@@ -288,7 +295,7 @@
     <img src="avatars/kop-groen.png" alt="">
     <div>
       <div class="naam">Programmabureau PRM</div>
-      <div class="sub">overlegruimte</div>
+      <div class="sub">Projectenassistent</div>
     </div>
   </div>
   <div class="kopknoppen">
@@ -330,9 +337,9 @@
   <div class="kolom">
     <main>
       <section class="hero">
+        <h1 class="hero-kop">Hi PRM-collega! Welkom bij het digitale programmabureau.</h1>
         <div class="hero-binnen">
           <div class="hero-tekst">
-            <h1>Hi PRM-collega!<br>Welkom bij het digitale programmabureau.</h1>
             <p>Ik ben Buddy. Graag help ik jou om van jouw programma of project een succes te maken.</p>
             <p>Om van een conceptueel idee te komen tot een concreet projectvoorstel, doorlopen we samen
             een aantal vaste stappen. Waar het nodig is leg ik jouw vraag voor aan een van mijn
