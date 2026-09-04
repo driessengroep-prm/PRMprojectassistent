@@ -477,7 +477,8 @@
   // Volgorde: ?webhook=... in de adresbalk wint van de vaste instelling.
   var uitUrl = new URLSearchParams(location.search).get("webhook");
   webhookVeld.value = uitUrl || STANDAARD_WEBHOOK || "";
-  if (!webhookVeld.value) { zetInstellingen(true); }
+  // Het paneel start altijd ingeklapt. Verstuur je iets zonder webhook,
+  // dan klapt het alsnog open met uitleg - zie versturen().
 
   function zetInstellingen(open) {
     document.body.setAttribute("data-instellingen", open ? "open" : "dicht");
