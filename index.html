@@ -127,26 +127,33 @@
   main{flex:1;overflow-y:auto}
   .hero{background:var(--creme);padding:40px 24px 0}
   body[data-gestart="ja"] .hero{display:none}
-  /* De kop staat buiten de kolommen en loopt over de volle breedte, zodat
-     de zin op een regel past. De maat schaalt mee met het venster; onder
-     de 1100 pixels breekt hij alsnog af in plaats van buiten beeld te lopen. */
+  /* Kop en tekst delen een kolom, zodat ze aan beide kanten op elkaar
+     aansluiten in plaats van alleen aan de linkerkant. */
   .hero-kop{
-    max-width:1100px;margin:0 auto 22px;
-    font-size:clamp(17px,2vw,28px);line-height:1.25;font-weight:700;
+    margin:0 0 18px;
+    font-size:clamp(17px,1.9vw,27px);line-height:1.25;font-weight:700;
     color:var(--koraal);letter-spacing:-.02em;
   }
   .hero-binnen{max-width:1100px;margin:0 auto;display:flex;gap:28px;align-items:flex-end}
   /* De tekst begint bovenaan; alleen Buddy staat op de onderlijn.
      Zonder dit zakt de tekst mee naar beneden en valt er een gat
      tussen de kop en de eerste alinea. */
-  .hero-tekst{flex:1 1 400px;align-self:flex-start;padding-bottom:44px;min-width:0}
-  .hero p{margin:0 0 12px;color:#4A5654;font-size:16px;max-width:52ch}
+  .hero-tekst{flex:1 1 400px;max-width:640px;align-self:flex-start;padding-bottom:44px;min-width:0}
+  .hero p{margin:0 0 12px;color:#4A5654;font-size:16px}
   .hero p:last-child{margin-bottom:0}
-  .hero-beeld{position:relative;flex:0 0 280px;height:280px;align-self:flex-end}
+  .hero-beeld{position:relative;flex:0 0 280px;height:280px;align-self:flex-end;margin-left:auto}
   .hero-beeld .boog{position:absolute;left:0;bottom:0;width:195px;height:195px}
   .hero-beeld img{
     position:absolute;right:0;bottom:0;height:280px;width:auto;
     filter:drop-shadow(0 8px 18px rgba(38,48,47,.14));
+  }
+
+  /* Naast Buddy wordt de tekstkolom onder deze breedte te smal; dan
+     zetten we het beeld eronder in plaats van ernaast. */
+  @media (max-width:1040px){
+    .hero-binnen{flex-direction:column;align-items:flex-start;gap:0}
+    .hero-tekst{padding-bottom:24px}
+    .hero-beeld{align-self:center;margin-left:0}
   }
 
   /* ---------- draad ---------- */
@@ -343,9 +350,9 @@
   <div class="kolom">
     <main>
       <section class="hero">
-        <h1 class="hero-kop">Hi PRM-collega! Welkom bij het digitale programmabureau.</h1>
         <div class="hero-binnen">
           <div class="hero-tekst">
+            <h1 class="hero-kop">Hi PRM-collega!<br>Welkom bij het digitale programmabureau.</h1>
             <p>Ik ben Buddy. Graag help ik jou om van jouw programma of project een succes te maken.</p>
             <p>Om van een conceptueel idee te komen tot een concreet projectvoorstel, doorlopen we samen
             een aantal vaste stappen. Waar het nodig is leg ik jouw vraag voor aan een van mijn
