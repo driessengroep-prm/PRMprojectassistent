@@ -395,19 +395,37 @@
   var STANDAARD_WEBHOOK = "";
 
   /* ------------------------------------------------------------------ *
-   *  DE POPPETJES                                                       *
+   *  HET TEAM                                                           *
    *                                                                     *
-   *  Buddy (de regisseur) is altijd groen. De specialisten krijgen een   *
-   *  van de andere kleuren, en houden die kleur door het hele gesprek.   *
-   *  Wil je een specialist een vaste kleur geven, zet zijn of haar naam  *
-   *  dan hieronder neer - precies zoals n8n de naam terugstuurt.         *
+   *  Buddy is de regisseur; de rest zijn zijn broertjes en zusjes. Elk   *
+   *  heeft een eigen kleur, zodat je aan het poppetje ziet wie er aan    *
+   *  het woord is. Wil je kleuren omwisselen, dan is dat hier een kwestie*
+   *  van twee waarden verwisselen.                                       *
+   *                                                                     *
+   *  Herkenning gaat op trefwoord, over naam en rol samen. Stuurt n8n    *
+   *  'Sparky', 'Sparringspartner' of 'sparring partner' terug, dan komt  *
+   *  dat alle drie de keren bij hetzelfde teamlid uit. Wie niet herkend  *
+   *  wordt houdt de naam die n8n stuurt en krijgt een reservekleur op    *
+   *  basis van die naam: stabiel door het gesprek heen, maar mogelijk    *
+   *  dezelfde kleur als een ander.                                       *
    * ------------------------------------------------------------------ */
-  var VASTE_KLEUREN = {
-    // "Sanne": "blauw",
-    // "Mo": "oranje"
-  };
+  var TEAM = [
+    { naam: "Buddy",  rol: "regisseur",        kleur: "groen",
+      trefwoorden: ["buddy", "regisseur"] },
+    { naam: "Sparky", rol: "sparringspartner", kleur: "oranje",
+      trefwoorden: ["sparky", "sparring"] },
+    { naam: "Scout",  rol: "projectinitiator", kleur: "blauw",
+      trefwoorden: ["scout", "initiator"] },
+    { naam: "Digger", rol: "onderzoeker",      kleur: "geel",
+      trefwoorden: ["digger", "onderzoek"] },
+    { naam: "Vinny",  rol: "toetser",          kleur: "paars",
+      trefwoorden: ["vinny", "toets"] },
+    { naam: "Penny",  rol: "PIDTcher",         kleur: "roze",
+      trefwoorden: ["penny", "pidtcher", "pid", "schrijv"] }
+  ];
 
-  var KLEUREN = ["blauw", "geel", "oranje", "paars", "roze"];
+  var BUDDY = TEAM[0];
+  var RESERVEKLEUREN = ["blauw", "geel", "oranje", "paars", "roze"];
 
   /* ================================================================== *
    *  OPSLAG                                                             *
@@ -509,20 +527,40 @@
   }
 
   // ---------------------------------------------------------------- poppetjes
-  function kleurVoor(naam) {
-    var n = String(naam || "").trim();
-    if (!n || n === "Regisseur" || n === "Buddy") { return "groen"; }
-    if (VASTE_KLEUREN[n]) { return VASTE_KLEUREN[n]; }
-    var som = 0;
-    for (var i = 0; i < n.length; i++) { som = (som * 31 + n.charCodeAt(i)) >>> 0; }
-    return KLEUREN[som % KLEUREN.length];
+  function herken(naam, rol) {
+    var zoek = (String(naam || "") + " " + String(rol || "")).toLowerCase();
+    if (!zoek.trim()) { return null; }
+    for (var i = 0; i < TEAM.length; i++) {
+      for (var j = 0; j < TEAM[i].trefwoorden.length; j++) {
+        if (zoek.indexOf(TEAM[i].trefwoorden[j]) !== -1) { return TEAM[i]; }
+      }
+    }
+    return null;
   }
 
-  function pop(naam, maat) {
+  function isBuddy(naam) { return herken(naam, "") === BUDDY; }
+
+  // Levert altijd iets bruikbaars op: een bekend teamlid, of anders de
+  // naam zoals n8n hem stuurt met een reservekleur.
+  function wie(naam, rol) {
+    var lid = herken(naam, rol);
+    if (lid) { return lid; }
+    var n = String(naam || "").trim() || "Specialist";
+    var som = 0;
+    for (var i = 0; i < n.length; i++) { som = (som * 31 + n.charCodeAt(i)) >>> 0; }
+    return {
+      naam: n,
+      rol: String(rol || "").trim() || "specialist",
+      kleur: RESERVEKLEUREN[som % RESERVEKLEUREN.length]
+    };
+  }
+
+  function pop(lid, maat) {
     var img = document.createElement("img");
     img.className = "pop pop-" + (maat || 40);
-    img.src = "avatars/kop-" + kleurVoor(naam) + ".png";
-    img.alt = naam ? naam : "";
+    img.src = "avatars/kop-" + lid.kleur + ".png";
+    img.alt = lid.naam;
+    img.title = lid.naam + " \u2014 " + lid.rol;
     return img;
   }
 
@@ -630,7 +668,7 @@
   function toonWachten() {
     var el = element("div", "wachten");
     el.id = "wachtblok";
-    el.appendChild(pop("Buddy", 34));
+    el.appendChild(pop(BUDDY, 34));
     el.appendChild(element("div", null,
       '<b>Buddy denkt na</b> en overlegt zo nodig met de specialisten. ' +
       'Bij een uitgebreide vraag duurt dat een minuut of langer. ' +
@@ -647,7 +685,7 @@
   function toonStoring(kop, uitleg) {
     wegWachten();
     var el = element("div", "storing");
-    el.appendChild(pop("Buddy", 34));
+    el.appendChild(pop(BUDDY, 34));
     el.appendChild(element("div", null, "<b>" + ontsnap(kop) + "</b>" + ontsnap(uitleg)));
     draad.appendChild(el);
     naarBeneden();
@@ -688,10 +726,13 @@
     var wrap = element("section", "overleg");
     wrap.setAttribute("data-open", "nee");
 
-    var namen = volgorde.map(function (s) {
+    // Per ronde eenmalig vaststellen wie er aan het woord is; naam, rol
+    // en kleur komen daarna allemaal uit dat ene teamlid.
+    var leden = volgorde.map(function (s) {
       var a = rondes[s].antwoord || {};
       var o = rondes[s].opdracht || {};
-      return (a.van && a.van !== "Regisseur") ? a.van : (o.aan || a.van || "een specialist");
+      var naam = (a.van && !isBuddy(a.van)) ? a.van : (o.aan || a.van || "");
+      return wie(naam, a.rol || o.rol || "");
     });
 
     var kop = element("button", "kop");
@@ -699,44 +740,45 @@
     kop.setAttribute("aria-expanded", "false");
 
     var stapel = element("span", "stapel");
-    namen.forEach(function (n) { stapel.appendChild(pop(n, 30)); });
+    leden.forEach(function (lid) { stapel.appendChild(pop(lid, 30)); });
     kop.appendChild(stapel);
 
     kop.appendChild(element("span", "zin",
-      "Buddy overlegde op de achtergrond met <b>" + ontsnap(opsomming(namen)) + "</b>"));
+      ontsnap(BUDDY.naam) + " overlegde op de achtergrond met <b>" +
+      ontsnap(opsomming(leden.map(function (lid) { return lid.naam; }))) + "</b>"));
     var pijl = element("span", "pijl", "openklappen");
     kop.appendChild(pijl);
     wrap.appendChild(kop);
 
     var inhoud = element("div", "inhoud");
-    volgorde.forEach(function (sleutel) {
+    volgorde.forEach(function (sleutel, index) {
       var ronde = rondes[sleutel];
       var opdracht = ronde.opdracht || {};
       var antwoord = ronde.antwoord || {};
-      var naam = (antwoord.van && antwoord.van !== "Regisseur") ? antwoord.van : opdracht.aan;
+      var lid = leden[index];
 
       var stap = element("div", "stap");
-      stap.appendChild(pop(naam, 40));
+      stap.appendChild(pop(lid, 40));
 
-      var wie = element("div", "wie");
-      wie.appendChild(element("div", "naam", ontsnap(naam || "Specialist")));
-      wie.appendChild(element("div", "rol", ontsnap(antwoord.rol || opdracht.rol || "specialist")));
+      var vak = element("div", "wie");
+      vak.appendChild(element("div", "naam", ontsnap(lid.naam)));
+      vak.appendChild(element("div", "rol", ontsnap(lid.rol)));
 
       if (opdracht.tekst) {
         var d1 = element("details", "blok");
-        d1.innerHTML = "<summary>Wat Buddy vroeg — " +
+        d1.innerHTML = "<summary>Wat " + ontsnap(BUDDY.naam) + " vroeg — " +
                        ontsnap(knip(opdracht.tekst, 70)) + "</summary>" +
                        '<div class="tekst doc">' + naarHtml(opdracht.tekst) + "</div>";
-        wie.appendChild(d1);
+        vak.appendChild(d1);
       }
       if (antwoord.tekst) {
         var d2 = element("details", "blok");
-        d2.innerHTML = "<summary>Wat " + ontsnap(naam || "de specialist") + " terugstuurde — " +
+        d2.innerHTML = "<summary>Wat " + ontsnap(lid.naam) + " terugstuurde — " +
                        ontsnap(knip(antwoord.tekst, 70)) + "</summary>" +
                        '<div class="tekst doc">' + naarHtml(antwoord.tekst) + "</div>";
-        wie.appendChild(d2);
+        vak.appendChild(d2);
       }
-      stap.appendChild(wie);
+      stap.appendChild(vak);
       inhoud.appendChild(stap);
     });
     wrap.appendChild(inhoud);
@@ -762,9 +804,10 @@
 
     var blok = element("div", "advies");
     var afzender = element("div", "afzender");
-    afzender.appendChild(pop("Buddy", 40));
+    afzender.appendChild(pop(BUDDY, 40));
     afzender.appendChild(element("div", null,
-      '<div class="naam">Buddy</div><div class="rol">regisseur</div>'));
+      '<div class="naam">' + ontsnap(BUDDY.naam) + '</div>' +
+      '<div class="rol">' + ontsnap(BUDDY.rol) + '</div>'));
     blok.appendChild(afzender);
 
     var kaart = element("div", "kaart");
@@ -954,15 +997,15 @@
         volgorde.forEach(function (s) {
           var opdracht = rondes[s].opdracht || {};
           var antwoord = rondes[s].antwoord || {};
-          var naam = (antwoord.van && antwoord.van !== "Regisseur") ? antwoord.van : opdracht.aan;
-          uit.push("#### " + (naam || "Specialist") +
-                   (antwoord.rol || opdracht.rol ? " — " + (antwoord.rol || opdracht.rol) : ""), "");
-          if (opdracht.tekst) { uit.push("**Wat Buddy vroeg:**", "", opdracht.tekst, ""); }
-          if (antwoord.tekst) { uit.push("**Wat " + (naam || "de specialist") + " terugstuurde:**", "", antwoord.tekst, ""); }
+          var ruw = (antwoord.van && !isBuddy(antwoord.van)) ? antwoord.van : opdracht.aan;
+          var lid = wie(ruw, antwoord.rol || opdracht.rol || "");
+          uit.push("#### " + lid.naam + " — " + lid.rol, "");
+          if (opdracht.tekst) { uit.push("**Wat " + BUDDY.naam + " vroeg:**", "", opdracht.tekst, ""); }
+          if (antwoord.tekst) { uit.push("**Wat " + lid.naam + " terugstuurde:**", "", antwoord.tekst, ""); }
         });
       }
 
-      uit.push("### Advies van Buddy", "", beurt.advies, "");
+      uit.push("### Advies van " + BUDDY.naam, "", beurt.advies, "");
     });
 
     var naam = g.titel.replace(/[^\wÀ-ſ -]/g, "").trim().slice(0, 60) || "gesprek";
