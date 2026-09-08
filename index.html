@@ -1122,6 +1122,10 @@
     toonVraag(tekst);
     toonWachten();
 
+    // Hoe lang het verzoek openstond, om een afgekapte verbinding te kunnen
+    // onderscheiden van een echte storing. Zie de uitleg in de catch hieronder.
+    var begonnen = Date.now();
+
     var kopregels = { "Content-Type": "application/json" };
     var gebruiker = document.getElementById("gebruiker").value.trim();
     var wachtwoord = document.getElementById("wachtwoord").value;
@@ -1154,6 +1158,7 @@
         // Kwam er een statuscode terug, dan heeft het verzoek n8n bereikt en
         // is CORS dus in orde. De uitleg sluit daarop aan, in plaats van naar
         // van alles te wijzen wat aantoonbaar niet het probleem is.
+        var seconden = Math.round((Date.now() - begonnen) / 1000);
         var uitleg = fout.message + ". ";
         if (location.protocol === "https:" && /^http:/i.test(url)) {
           uitleg += "Deze pagina draait op https en de webhook op http. Browsers blokkeren dat. " +
@@ -1171,6 +1176,13 @@
                     "rood staat.";
         } else if (fout.status) {
           uitleg += "Kijk in n8n bij Executions wat er bij deze aanroep gebeurd is.";
+        } else if (/Failed to fetch|NetworkError|Load failed/i.test(fout.message) && seconden >= 45) {
+          uitleg += "Het verzoek stond " + seconden + " seconden open en is toen afgekapt. n8n Cloud " +
+                    "staat achter een gateway die een verbinding na ongeveer honderd seconden " +
+                    "verbreekt. De workflow draait daar waarschijnlijk gewoon door: kijk in n8n bij " +
+                    "Executions — de kans is groot dat de run als geslaagd staat en het antwoord er " +
+                    "wél is. Alleen kon deze pagina het niet meer ontvangen. Kort het onderzoek in, " +
+                    "of laat de workflow direct antwoorden en het resultaat apart ophalen.";
         } else if (/Failed to fetch|NetworkError|Load failed/i.test(fout.message)) {
           uitleg += "Er kwam geen bruikbaar antwoord terug. Meestal betekent dit dat de workflow " +
                     "onderweg is vastgelopen op een node — kijk in n8n bij Executions welke node " +
