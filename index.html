@@ -333,7 +333,8 @@
   </div>
   <p class="uitleg">
     De production-URL vind je in n8n op de node <em>When chat message received</em>, onder Chat URL.
-    Gebruiker en wachtwoord worden nergens opgeslagen &mdash; na een refresh typ je ze opnieuw.
+    Die wordt in deze browser onthouden, dus je hoeft hem maar &eacute;&eacute;n keer te plakken.
+    Gebruiker en wachtwoord worden bewust niet bewaard &mdash; die typ je na een refresh opnieuw.
   </p>
 </div>
 
@@ -386,11 +387,18 @@
   /* ------------------------------------------------------------------ *
    *  INSTELLINGEN                                                       *
    *                                                                     *
-   *  Vul STANDAARD_WEBHOOK in als je de URL niet elke keer wilt plakken. *
-   *  Let op: staat deze repository op public, dan is alles wat hier      *
-   *  staat door iedereen te lezen. Laat hem leeg en gebruik het veld     *
-   *  onder Instellingen (of ?webhook=... in de adresbalk) als je dat     *
-   *  liever niet hebt.                                                   *
+   *  De webhook-URL wordt onthouden in de browser van wie de pagina      *
+   *  gebruikt. Je plakt hem dus een keer onder Instellingen, en daarna   *
+   *  staat hij er bij elk bezoek. Het wachtwoord wordt niet bewaard.     *
+   *                                                                     *
+   *  STANDAARD_WEBHOOK hoeft daarom leeg te blijven. Vul je hem toch in, *
+   *  dan geldt hij voor iedereen die de pagina opent - maar deze         *
+   *  repository staat op public, dus de URL is dan ook voor iedereen     *
+   *  leesbaar, en wie hem heeft kan de workflow aanroepen en verbruikt   *
+   *  jouw executions en tokens.                                          *
+   *                                                                     *
+   *  Volgorde: ?webhook=... in de adresbalk wint van wat er onthouden    *
+   *  is, en dat wint weer van de waarde hieronder.                       *
    * ------------------------------------------------------------------ */
   var STANDAARD_WEBHOOK = "";
 
@@ -489,6 +497,31 @@
     };
   })();
 
+  /* ================================================================== *
+   *  ONTHOUDEN WEBHOOK                                                  *
+   *                                                                     *
+   *  Alleen de URL, en alleen in deze browser. Gebruiker en wachtwoord   *
+   *  blijven er bewust buiten: die typ je na een refresh opnieuw.        *
+   *  Werkt de opslag niet (privemodus, geblokkeerde site-gegevens), dan  *
+   *  faalt dit stil - de pagina werkt dan gewoon, je plakt de URL alleen *
+   *  elk bezoek opnieuw.                                                 *
+   * ================================================================== */
+  var Webhook = (function () {
+    var SLEUTEL = "prm-webhook-v1";
+    return {
+      lees: function () {
+        try { return window.localStorage.getItem(SLEUTEL) || ""; }
+        catch (e) { return ""; }
+      },
+      schrijf: function (url) {
+        try {
+          if (url) { window.localStorage.setItem(SLEUTEL, url); }
+          else { window.localStorage.removeItem(SLEUTEL); }
+        } catch (e) { /* niets te doen: onthouden is een gemak, geen eis */ }
+      }
+    };
+  })();
+
   var draad = document.getElementById("draad");
   var invoer = document.getElementById("bericht");
   var knop = document.getElementById("versturen");
@@ -499,11 +532,18 @@
   var gesprek = null;        // het gesprek dat nu open staat, of null
   var opslagWerkt = Opslag.beschikbaar();
 
-  // Volgorde: ?webhook=... in de adresbalk wint van de vaste instelling.
+  // Volgorde: de adresbalk wint van wat onthouden is, en dat wint van
+  // de vaste instelling bovenaan.
   var uitUrl = new URLSearchParams(location.search).get("webhook");
-  webhookVeld.value = uitUrl || STANDAARD_WEBHOOK || "";
+  webhookVeld.value = uitUrl || Webhook.lees() || STANDAARD_WEBHOOK || "";
   // Het paneel start altijd ingeklapt. Verstuur je iets zonder webhook,
   // dan klapt het alsnog open met uitleg - zie versturen().
+
+  // Onthouden zodra het veld verandert. 'change' vuurt bij verlaten van
+  // het veld, dus ook als je meteen op Versturen klikt.
+  webhookVeld.addEventListener("change", function () {
+    Webhook.schrijf(webhookVeld.value.trim());
+  });
 
   function zetInstellingen(open) {
     document.body.setAttribute("data-instellingen", open ? "open" : "dicht");
@@ -1034,6 +1074,7 @@
       webhookVeld.focus();
       return;
     }
+    Webhook.schrijf(url);   // vangnet, mocht 'change' niet gevuurd hebben
 
     if (!gesprek) {
       gesprek = {

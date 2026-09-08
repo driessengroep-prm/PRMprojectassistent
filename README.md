@@ -18,13 +18,25 @@ https://driessengroep-prm.github.io/PRMprojectassistent/
 ## Koppelen aan n8n
 
 Nodig is de **production**-URL van de node *When chat message received*
-(in n8n zichtbaar als Chat URL, eindigend op `/chat`). Drie manieren om die mee te geven:
+(in n8n zichtbaar als Chat URL, eindigend op `/chat`).
 
-1. Plakken in het veld rechtsboven op de pagina.
-2. Meegeven in de adresbalk: `...github.io/PRMprojectassistent/?webhook=https://...`
-   Handig als bladwijzer.
-3. Vastzetten in `index.html`, in `STANDAARD_WEBHOOK` bovenaan het script.
-   Alleen doen als deze repository op private staat.
+Plak die één keer in het veld onder **Instellingen**, rechtsboven op de pagina.
+De browser onthoudt hem, dus bij een volgend bezoek staat hij er al. Gebruiker en
+wachtwoord worden bewust *niet* bewaard; die typ je na een refresh opnieuw.
+
+Onthouden gebeurt per browser en per apparaat. Een collega die de pagina voor het
+eerst opent, plakt de URL dus zelf één keer.
+
+Twee alternatieven:
+
+1. Meegeven in de adresbalk: `...github.io/PRMprojectassistent/?webhook=https://...`
+   Dat wint van wat er onthouden is. Handig als bladwijzer of om even een tweede
+   workflow te testen.
+2. Vastzetten in `index.html`, in `STANDAARD_WEBHOOK` bovenaan het script. Dan
+   werkt de pagina meteen voor iedereen — maar **deze repository staat op public**,
+   dus de URL is dan voor iedereen leesbaar. Wie hem heeft kan de workflow
+   aanroepen en verbruikt jouw executions en tokens. Doe dit alleen met *Basic
+   Auth* aan op de Chat Trigger; zie [Toegang beperken](#toegang-beperken).
 
 In n8n moet daarnaast:
 
