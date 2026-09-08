@@ -14,7 +14,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Zet het resultaat klaar voor de workflow 'Resultaat ophalen'.\n// Google Sheets houdt maximaal 50.000 tekens per cel, en een forum met\n// volledige rapporten van Digger gaat daar zo overheen. Daarom knippen we\n// het forum in stukken van 45.000 en zetten die in aparte kolommen.\n\nconst bron = $input.first().json;\nconst trigger = $('When chat message received').first().json;\n\nconst forumTekst = JSON.stringify(bron.forum ?? []);\nconst STUK = 45000;\nconst stukken = [];\nfor (let i = 0; i < forumTekst.length; i += STUK) {\n  stukken.push(forumTekst.slice(i, i + STUK));\n}\n\n// Past het echt niet, dan liever het advies zonder overleg dan een\n// afgekapte JSON die straks niet te lezen is.\nif (stukken.length > 4) {\n  stukken.length = 0;\n  stukken.push('[]');\n}\n\nreturn [{\n  json: {\n    beurtId: trigger.beurtId ?? '',\n    sessionId: trigger.sessionId ?? '',\n    output: String(bron.output ?? '').slice(0, 49000),\n    forum1: stukken[0] ?? '',\n    forum2: stukken[1] ?? '',\n    forum3: stukken[2] ?? '',\n    forum4: stukken[3] ?? '',\n    tijd: new Date().toISOString(),\n  },\n}];"
+        "jsCode": "// Zet het resultaat klaar voor de workflow 'Resultaat ophalen'.\n// Excel houdt maximaal 32.767 tekens per cel, en een forum met volledige\n// rapporten van Digger gaat daar zo overheen. Daarom knippen we het forum\n// in stukken van 30.000 en zetten die in aparte kolommen.\n\nconst bron = $input.first().json;\nconst trigger = $('When chat message received').first().json;\n\nconst CEL = 30000;          // ruim onder de Excel-grens van 32.767\nconst KOLOMMEN = 6;         // samen 180.000 tekens forum\n\nconst forumTekst = JSON.stringify(bron.forum ?? []);\nconst stukken = [];\nfor (let i = 0; i < forumTekst.length; i += CEL) {\n  stukken.push(forumTekst.slice(i, i + CEL));\n}\n\n// Past het echt niet, dan liever het advies zonder overleg dan een\n// afgekapte JSON die straks niet te lezen is.\nif (stukken.length > KOLOMMEN) {\n  stukken.length = 0;\n  stukken.push('[]');\n}\n\nreturn [{\n  json: {\n    beurtId: trigger.beurtId ?? '',\n    sessionId: trigger.sessionId ?? '',\n    output: String(bron.output ?? '').slice(0, CEL),\n    forum1: stukken[0] ?? '',\n    forum2: stukken[1] ?? '',\n    forum3: stukken[2] ?? '',\n    forum4: stukken[3] ?? '',\n    forum5: stukken[4] ?? '',\n    forum6: stukken[5] ?? '',\n    tijd: new Date().toISOString(),\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -24,36 +24,23 @@
     },
     {
       "parameters": {
-        "operation": "appendOrUpdate",
-        "documentId": {
+        "resource": "worksheet",
+        "operation": "append",
+        "workbook": {
           "__rl": true,
-          "value": "VERVANG_DOOR_SPREADSHEET_ID",
+          "value": "VERVANG_DOOR_WORKBOOK",
           "mode": "id"
         },
-        "sheetName": {
+        "worksheet": {
           "__rl": true,
           "value": "resultaten",
           "mode": "name"
         },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "beurtId": "={{ $json.beurtId }}",
-            "sessionId": "={{ $json.sessionId }}",
-            "output": "={{ $json.output }}",
-            "forum1": "={{ $json.forum1 }}",
-            "forum2": "={{ $json.forum2 }}",
-            "forum3": "={{ $json.forum3 }}",
-            "forum4": "={{ $json.forum4 }}",
-            "tijd": "={{ $json.tijd }}"
-          },
-          "matchingColumns": ["beurtId"],
-          "schema": []
-        },
+        "dataMode": "autoMapInputData",
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.1,
       "position": [240, -200],
       "id": "b2000000-0000-4000-8000-000000000003",
       "name": "Resultaat wegschrijven",

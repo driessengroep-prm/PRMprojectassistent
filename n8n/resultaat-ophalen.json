@@ -3,8 +3,8 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Resultaat ophalen\n\nDe overlegruimte peilt deze webhook tot het antwoord klaarstaat.\n\n**Na import twee dingen doen:**\n1. Open *Rij zoeken* en kies je Google-credential, het spreadsheet en het tabblad opnieuw uit de dropdowns. Het document staat nu op een tijdelijke aanduiding.\n2. Activeer de workflow en plak de production-URL in de overlegruimte, onder Instellingen bij Resultaat-URL.\n\n**Let op:** op *Rij zoeken* staat 'Always Output Data' aan. Zonder dat stopt de workflow zodra de rij er nog niet is, komt de Respond-node niet aan de beurt en krijgt de pagina niets terug in plaats van 'bezig'.\n\nDe webhook heeft bewust geen authenticatie: het beurtId is een willekeurige UUID en werkt zelf als sleutel. Wil je toch Basic Auth, houd er dan rekening mee dat de browser eerst een preflight stuurt.",
-        "height": 480,
+        "content": "## Resultaat ophalen\n\nDe overlegruimte peilt deze webhook tot het antwoord klaarstaat.\n\n**Na import drie dingen doen:**\n1. Open *Rij zoeken* en kies je Microsoft-credential. Selecteer daarna werkmap, werkblad en tabel opnieuw uit de dropdowns; die staan nu op een tijdelijke aanduiding.\n2. Controleer dat de bewerking op **Table -> Lookup** staat, met kolom `beurtId`.\n3. Activeer de workflow en plak de production-URL in de overlegruimte, onder Instellingen bij Resultaat-URL.\n\n**Let op:** op *Rij zoeken* staat 'Always Output Data' aan. Zonder dat stopt de workflow zodra de rij er nog niet is, komt de Respond-node niet aan de beurt en krijgt de pagina niets terug in plaats van 'bezig'.\n\nHet bereik in Excel moet als **tabel** zijn opgemaakt (Invoegen > Tabel). Zonder tabel kan Lookup niet zoeken en moet het hele blad per peiling worden ingelezen.\n\nDe webhook heeft bewust geen authenticatie: het beurtId is een willekeurige UUID en werkt zelf als sleutel.",
+        "height": 520,
         "width": 420,
         "color": 4
       },
@@ -32,28 +32,29 @@
     },
     {
       "parameters": {
-        "documentId": {
+        "resource": "table",
+        "operation": "lookup",
+        "workbook": {
           "__rl": true,
-          "value": "VERVANG_DOOR_SPREADSHEET_ID",
+          "value": "VERVANG_DOOR_WORKBOOK",
           "mode": "id"
         },
-        "sheetName": {
+        "worksheet": {
           "__rl": true,
           "value": "resultaten",
           "mode": "name"
         },
-        "filtersUI": {
-          "values": [
-            {
-              "lookupColumn": "beurtId",
-              "lookupValue": "={{ $json.query.beurtId }}"
-            }
-          ]
+        "table": {
+          "__rl": true,
+          "value": "VERVANG_DOOR_TABEL",
+          "mode": "name"
         },
+        "lookupColumn": "beurtId",
+        "lookupValue": "={{ $json.query.beurtId }}",
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.1,
       "position": [-80, 0],
       "id": "a1000000-0000-4000-8000-000000000003",
       "name": "Rij zoeken",
@@ -62,7 +63,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Zet de gevonden rij om naar het antwoord dat de overlegruimte verwacht:\n//   { status: 'bezig' }\n//   { status: 'klaar', output, forum }\n// Het forum staat in maximaal vier kolommen, omdat een cel in Google Sheets\n// maar 50.000 tekens houdt. Hier plakken we die weer aan elkaar.\n\nconst rij = $input.first()?.json ?? {};\n\n// Nog geen rij gevonden: de hoofdworkflow is nog bezig.\nif (!rij.beurtId) {\n  return [{ json: { status: 'bezig' } }];\n}\n\nconst forumTekst = [rij.forum1, rij.forum2, rij.forum3, rij.forum4]\n  .filter((s) => typeof s === 'string' && s.length)\n  .join('');\n\nlet forum = [];\ntry {\n  forum = forumTekst ? JSON.parse(forumTekst) : [];\n} catch (e) {\n  forum = [];   // liever het advies zonder overleg dan een harde fout\n}\n\nreturn [{\n  json: {\n    status: 'klaar',\n    output: rij.output ?? '',\n    forum,\n  },\n}];"
+        "jsCode": "// Zet de gevonden rij om naar het antwoord dat de overlegruimte verwacht:\n//   { status: 'bezig' }\n//   { status: 'klaar', output, forum }\n// Het forum staat in maximaal zes kolommen, omdat een cel in Excel maar\n// 32.767 tekens houdt. Hier plakken we die weer aan elkaar.\n\nconst rij = $input.first()?.json ?? {};\n\n// Nog geen rij gevonden: de hoofdworkflow is nog bezig.\nif (!rij.beurtId) {\n  return [{ json: { status: 'bezig' } }];\n}\n\nconst forumTekst = [rij.forum1, rij.forum2, rij.forum3, rij.forum4, rij.forum5, rij.forum6]\n  .filter((s) => typeof s === 'string' && s.length)\n  .join('');\n\nlet forum = [];\ntry {\n  forum = forumTekst ? JSON.parse(forumTekst) : [];\n} catch (e) {\n  forum = [];   // liever het advies zonder overleg dan een harde fout\n}\n\nreturn [{\n  json: {\n    status: 'klaar',\n    output: rij.output ?? '',\n    forum,\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
