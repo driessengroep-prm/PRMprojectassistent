@@ -332,10 +332,20 @@
       <input id="wachtwoord" type="password" autocomplete="current-password" placeholder="wachtwoord">
     </div>
   </div>
+  <div class="rij" style="margin-top:12px">
+    <div class="veld">
+      <label for="resultaat">Resultaat-URL <span style="font-weight:400">(alleen bij losse afhandeling)</span></label>
+      <input id="resultaat" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/resultaat">
+    </div>
+  </div>
   <p class="uitleg">
     De production-URL vind je in n8n op de node <em>When chat message received</em>, onder Chat URL.
     Die wordt in deze browser onthouden, dus je hoeft hem maar &eacute;&eacute;n keer te plakken.
     Gebruiker en wachtwoord worden bewust niet bewaard &mdash; die typ je na een refresh opnieuw.
+    <br>
+    De resultaat-URL is optioneel. Laat je hem leeg, dan wacht de pagina op het antwoord van de
+    chat trigger zelf. Vul je hem in, dan antwoordt n8n meteen en haalt de pagina het resultaat
+    daarna apart op &mdash; nodig zodra een vraag langer duurt dan de gateway toestaat.
   </p>
 </div>
 
@@ -508,18 +518,21 @@
    *  elk bezoek opnieuw.                                                 *
    * ================================================================== */
   var Webhook = (function () {
-    var SLEUTEL = "prm-webhook-v1";
+    function lees(sleutel) {
+      try { return window.localStorage.getItem(sleutel) || ""; }
+      catch (e) { return ""; }
+    }
+    function schrijf(sleutel, url) {
+      try {
+        if (url) { window.localStorage.setItem(sleutel, url); }
+        else { window.localStorage.removeItem(sleutel); }
+      } catch (e) { /* niets te doen: onthouden is een gemak, geen eis */ }
+    }
     return {
-      lees: function () {
-        try { return window.localStorage.getItem(SLEUTEL) || ""; }
-        catch (e) { return ""; }
-      },
-      schrijf: function (url) {
-        try {
-          if (url) { window.localStorage.setItem(SLEUTEL, url); }
-          else { window.localStorage.removeItem(SLEUTEL); }
-        } catch (e) { /* niets te doen: onthouden is een gemak, geen eis */ }
-      }
+      lees: function () { return lees("prm-webhook-v1"); },
+      schrijf: function (url) { schrijf("prm-webhook-v1", url); },
+      leesResultaat: function () { return lees("prm-resultaat-v1"); },
+      schrijfResultaat: function (url) { schrijf("prm-resultaat-v1", url); }
     };
   })();
 
@@ -527,6 +540,7 @@
   var invoer = document.getElementById("bericht");
   var knop = document.getElementById("versturen");
   var webhookVeld = document.getElementById("webhook");
+  var resultaatVeld = document.getElementById("resultaat");
   var instelknop = document.getElementById("instelknop");
   var lijstBak = document.getElementById("gesprekken");
 
@@ -544,6 +558,12 @@
   // het veld, dus ook als je meteen op Versturen klikt.
   webhookVeld.addEventListener("change", function () {
     Webhook.schrijf(webhookVeld.value.trim());
+  });
+
+  resultaatVeld.value = new URLSearchParams(location.search).get("resultaat") ||
+                        Webhook.leesResultaat() || "";
+  resultaatVeld.addEventListener("change", function () {
+    Webhook.schrijfResultaat(resultaatVeld.value.trim());
   });
 
   function zetInstellingen(open) {
@@ -733,6 +753,8 @@
     naarBeneden();
   }
 
+  var wachtKlok = null;
+
   function toonWachten() {
     var el = element("div", "wachten");
     el.id = "wachtblok";
@@ -740,12 +762,24 @@
     el.appendChild(element("div", null,
       '<b>Buddy denkt na</b> en overlegt zo nodig met de specialisten. ' +
       'Bij een uitgebreide vraag duurt dat een minuut of langer. ' +
+      '<span id="wachtduur"></span>' +
       '<span class="stipjes"><span></span><span></span><span></span></span>'));
     draad.appendChild(el);
+
+    // Een lopende teller, zodat een wachttijd van minuten niet als vastgelopen oogt.
+    var start = Date.now();
+    wachtKlok = setInterval(function () {
+      var vak = document.getElementById("wachtduur");
+      if (!vak) { return; }
+      var s = Math.round((Date.now() - start) / 1000);
+      vak.textContent = s < 60 ? s + " s " : Math.floor(s / 60) + " min " + (s % 60) + " s ";
+    }, 1000);
+
     naarBeneden();
   }
 
   function wegWachten() {
+    if (wachtKlok) { clearInterval(wachtKlok); wachtKlok = null; }
     var el = document.getElementById("wachtblok");
     if (el) { el.remove(); }
   }
@@ -1088,6 +1122,85 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
+  // n8n levert zijn antwoord soms als array, soms verpakt in json.
+  function uitpakken(data) {
+    var d = Array.isArray(data) ? (data[0] || {}) : (data || {});
+    if (d.json) { d = d.json; }
+    return d;
+  }
+
+  /* ================================================================== *
+   *  RESULTAAT APART OPHALEN                                            *
+   *                                                                     *
+   *  Duurt een vraag langer dan de gateway van n8n toestaat, dan wordt   *
+   *  de verbinding afgekapt terwijl de workflow gewoon doorloopt. In die *
+   *  opzet antwoordt n8n meteen en vraagt de pagina daarna zelf om het   *
+   *  resultaat, net zolang tot het klaar is.                             *
+   *                                                                     *
+   *  De resultaat-URL krijgt beurtId als queryparameter en hoort terug   *
+   *  te geven:                                                           *
+   *    { "status": "bezig" }                                             *
+   *    { "status": "klaar", "output": "...", "forum": [ ... ] }          *
+   *    { "status": "fout",  "melding": "..." }                           *
+   *                                                                     *
+   *  Elke peiling is een execution in n8n. Daarom eerst elke vijf        *
+   *  seconden en daarna elk kwartier-minuutje, in plaats van onafgebroken *
+   *  doorvragen.                                                         *
+   * ================================================================== */
+  var PEIL_MAX = 10 * 60 * 1000;   // na tien minuten geven we het op
+
+  function peilen(resultaatUrl, beurtId, autorisatie) {
+    var start = Date.now();
+    var kopregels = autorisatie ? { Authorization: autorisatie } : {};
+
+    return new Promise(function (klaar, mislukt) {
+      function nogEens() {
+        var verstreken = Date.now() - start;
+        if (verstreken > PEIL_MAX) {
+          var op = new Error("na tien minuten was er nog geen antwoord");
+          op.opgegeven = true;
+          mislukt(op);
+          return;
+        }
+        setTimeout(kijken, verstreken < 30000 ? 5000 : 15000);
+      }
+
+      function kijken() {
+        var scheider = resultaatUrl.indexOf("?") === -1 ? "?" : "&";
+        fetch(resultaatUrl + scheider + "beurtId=" + encodeURIComponent(beurtId), {
+          method: "GET",
+          headers: kopregels
+        })
+          .then(function (res) {
+            if (!res.ok) {
+              var pech = new Error("de resultaat-URL antwoordde met status " + res.status);
+              pech.status = res.status;
+              pech.bijPeilen = true;
+              throw pech;
+            }
+            return res.json();
+          })
+          .then(function (data) {
+            var d = uitpakken(data);
+            if (d.status === "fout") {
+              var gemeld = new Error(d.melding || "zonder nadere toelichting");
+              gemeld.vanWorkflow = true;
+              throw gemeld;
+            }
+            var advies = adviesUit(d.forum, d.output || d.text || "");
+            if (d.status === "klaar" || advies || (Array.isArray(d.forum) && d.forum.length)) {
+              klaar({ forum: d.forum, advies: advies });
+              return;
+            }
+            nogEens();   // nog bezig
+          })
+          .catch(mislukt);
+      }
+
+      nogEens();
+    });
+  }
+
   // ---------------------------------------------------------------- versturen
   function versturen() {
     var tekst = invoer.value.trim();
@@ -1133,10 +1246,22 @@
       kopregels.Authorization = "Basic " + btoa(gebruiker + ":" + wachtwoord);
     }
 
+    // Eigen kenmerk voor deze ene beurt. n8n hangt het antwoord straks aan dit
+    // kenmerk op, zodat de pagina weet waar ze op moet wachten. De pagina
+    // verzint het zelf, zodat ze niet afhankelijk is van wat n8n terugstuurt.
+    var beurtId = maakId();
+    var resultaatUrl = resultaatVeld.value.trim();
+    if (resultaatUrl) { Webhook.schrijfResultaat(resultaatUrl); }
+
     fetch(url, {
       method: "POST",
       headers: kopregels,
-      body: JSON.stringify({ action: "sendMessage", sessionId: gesprek.id, chatInput: tekst })
+      body: JSON.stringify({
+        action: "sendMessage",
+        sessionId: gesprek.id,
+        chatInput: tekst,
+        beurtId: beurtId
+      })
     })
       .then(function (res) {
         if (!res.ok) {
@@ -1147,11 +1272,21 @@
         return res.json();
       })
       .then(function (data) {
-        var d = Array.isArray(data) ? (data[0] || {}) : data;
-        if (d.json) { d = d.json; }
+        var d = uitpakken(data);
         var advies = adviesUit(d.forum, d.output || d.text || "");
-        toonAntwoord(d.forum, advies);
-        gesprek.beurten.push({ vraag: tekst, forum: d.forum || null, advies: advies });
+        // Kwam het antwoord meteen mee, dan tonen we dat gewoon. Zo blijft de
+        // pagina werken met een chat trigger die pas antwoordt als hij klaar is.
+        if (advies || (Array.isArray(d.forum) && d.forum.length)) {
+          return { forum: d.forum, advies: advies };
+        }
+        if (!resultaatUrl) {
+          throw new Error("n8n gaf een leeg antwoord terug");
+        }
+        return peilen(resultaatUrl, beurtId, kopregels.Authorization);
+      })
+      .then(function (r) {
+        toonAntwoord(r.forum, r.advies);
+        gesprek.beurten.push({ vraag: tekst, forum: r.forum || null, advies: r.advies });
         opslaan();
       })
       .catch(function (fout) {
@@ -1160,7 +1295,21 @@
         // van alles te wijzen wat aantoonbaar niet het probleem is.
         var seconden = Math.round((Date.now() - begonnen) / 1000);
         var uitleg = fout.message + ". ";
-        if (location.protocol === "https:" && /^http:/i.test(url)) {
+        if (fout.vanWorkflow) {
+          uitleg = "De workflow meldde zelf een fout: " + fout.message + ". Het verzoek is dus " +
+                   "goed aangekomen en n8n heeft erop gereageerd. Kijk in n8n bij Executions bij " +
+                   "welke node het misging.";
+        } else if (fout.opgegeven) {
+          uitleg = "Buddy was na tien minuten nog niet klaar. De workflow draait in n8n " +
+                   "mogelijk nog door; kijk bij Executions of er alsnog een resultaat komt. " +
+                   "Duurt het structureel zo lang, kort dan het aantal zoekopdrachten van de " +
+                   "Onderzoeker in.";
+        } else if (fout.bijPeilen) {
+          uitleg = "Het ophalen van het resultaat mislukte: " + fout.message + ". De vraag is " +
+                   "wel verstuurd en draait waarschijnlijk gewoon in n8n. Controleer de " +
+                   "resultaat-URL onder Instellingen, en of daar dezelfde Allowed Origins (CORS) " +
+                   "en authenticatie staan als bij de chat trigger.";
+        } else if (location.protocol === "https:" && /^http:/i.test(url)) {
           uitleg += "Deze pagina draait op https en de webhook op http. Browsers blokkeren dat. " +
                     "Zet n8n achter https, of open deze pagina lokaal via http.";
         } else if (fout.status === 401 || fout.status === 403) {
