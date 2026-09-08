@@ -223,6 +223,7 @@
   .doc p{margin:0 0 .85em}
   .doc ul,.doc ol{margin:0 0 .9em;padding-left:1.3em}
   .doc li{margin-bottom:.35em}
+  .doc li > ul,.doc li > ol{margin:.35em 0 0}
   .doc li::marker{color:var(--koraal)}
   .doc code{
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.87em;
@@ -619,15 +620,51 @@
   function naarHtml(ruw) {
     var regels = ontsnap(ruw || "").split(/\r?\n/);
     var uit = [];
-    var lijst = null;   // "ul" of "ol"
     var alinea = [];
     var citaat = null;
+
+    // Open lijsten, van buiten naar binnen: { tag, inspring, liOpen }.
+    // Een stapel, zodat een ingesprongen opsomming binnen zijn bovenliggende
+    // punt komt te staan in plaats van ernaast.
+    var stapel = [];
 
     function sluitAlinea() {
       if (alinea.length) { uit.push("<p>" + inline(alinea.join(" ")) + "</p>"); alinea = []; }
     }
-    function sluitLijst() {
-      if (lijst) { uit.push("</" + lijst + ">"); lijst = null; }
+    function sluitPunt(niveau) {
+      if (niveau.liOpen) { uit.push("</li>"); niveau.liOpen = false; }
+    }
+    // Sluit alle niveaus die dieper liggen dan deze inspringing.
+    function sluitTot(inspring) {
+      while (stapel.length && stapel[stapel.length - 1].inspring > inspring) {
+        var niveau = stapel.pop();
+        sluitPunt(niveau);
+        uit.push("</" + niveau.tag + ">");
+      }
+    }
+    function sluitLijst() { sluitTot(-1); }
+
+    // tag: "ul" of "ol"; nummer alleen bij een genummerde lijst, zodat een
+    // lijst die na een witregel opnieuw begint verdergaat bij het juiste
+    // cijfer in plaats van terug te vallen op 1.
+    function lijstPunt(inspring, tag, nummer, tekst) {
+      sluitAlinea();
+      sluitTot(inspring);
+      var top = stapel[stapel.length - 1];
+      if (!top || top.inspring < inspring) {
+        uit.push(nummer && nummer !== "1" ? "<" + tag + ' start="' + nummer + '">' : "<" + tag + ">");
+        stapel.push({ tag: tag, inspring: inspring, liOpen: false });
+      } else if (top.tag !== tag) {
+        sluitPunt(top);
+        uit.push("</" + top.tag + ">");
+        stapel.pop();
+        uit.push(nummer && nummer !== "1" ? "<" + tag + ' start="' + nummer + '">' : "<" + tag + ">");
+        stapel.push({ tag: tag, inspring: inspring, liOpen: false });
+      } else {
+        sluitPunt(top);
+      }
+      uit.push("<li>" + inline(tekst));
+      stapel[stapel.length - 1].liOpen = true;
     }
     function sluitCitaat() {
       if (citaat) {
@@ -639,6 +676,8 @@
 
     regels.forEach(function (regel) {
       var r = regel.trim();
+      // Inspringing bepaalt het niveau; een tab telt als twee spaties.
+      var inspring = regel.replace(/\t/g, "  ").match(/^ */)[0].length;
 
       if (!r) { sluitAlles(); return; }
 
@@ -663,24 +702,13 @@
       if (/^(-{3,}|\*{3,}|_{3,})$/.test(r)) { sluitAlinea(); sluitLijst(); uit.push("<hr>"); return; }
 
       var punt = r.match(/^[-*•]\s+(.*)$/);
-      if (punt) {
-        sluitAlinea();
-        if (lijst !== "ul") { sluitLijst(); uit.push("<ul>"); lijst = "ul"; }
-        uit.push("<li>" + inline(punt[1]) + "</li>");
-        return;
-      }
+      if (punt) { lijstPunt(inspring, "ul", null, punt[1]); return; }
 
-      var genummerd = r.match(/^\d+[.)]\s+(.*)$/);
-      if (genummerd) {
-        sluitAlinea();
-        if (lijst !== "ol") { sluitLijst(); uit.push("<ol>"); lijst = "ol"; }
-        uit.push("<li>" + inline(genummerd[1]) + "</li>");
-        return;
-      }
+      var genummerd = r.match(/^(\d+)[.)]\s+(.*)$/);
+      if (genummerd) { lijstPunt(inspring, "ol", genummerd[1], genummerd[2]); return; }
 
-      if (lijst) {
-        // vervolgregel binnen een opsomming
-        uit[uit.length - 1] = uit[uit.length - 1].replace(/<\/li>$/, " " + inline(r) + "</li>");
+      if (stapel.length && stapel[stapel.length - 1].liOpen) {
+        uit.push(" " + inline(r));   // vervolgregel binnen een opsommingspunt
         return;
       }
       alinea.push(r);
