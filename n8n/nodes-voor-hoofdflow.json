@@ -1,0 +1,70 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"bezig\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [-200, -200],
+      "id": "b2000000-0000-4000-8000-000000000001",
+      "name": "Meteen bevestigen"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Zet het resultaat klaar voor de workflow 'Resultaat ophalen'.\n// Google Sheets houdt maximaal 50.000 tekens per cel, en een forum met\n// volledige rapporten van Digger gaat daar zo overheen. Daarom knippen we\n// het forum in stukken van 45.000 en zetten die in aparte kolommen.\n\nconst bron = $input.first().json;\nconst trigger = $('When chat message received').first().json;\n\nconst forumTekst = JSON.stringify(bron.forum ?? []);\nconst STUK = 45000;\nconst stukken = [];\nfor (let i = 0; i < forumTekst.length; i += STUK) {\n  stukken.push(forumTekst.slice(i, i + STUK));\n}\n\n// Past het echt niet, dan liever het advies zonder overleg dan een\n// afgekapte JSON die straks niet te lezen is.\nif (stukken.length > 4) {\n  stukken.length = 0;\n  stukken.push('[]');\n}\n\nreturn [{\n  json: {\n    beurtId: trigger.beurtId ?? '',\n    sessionId: trigger.sessionId ?? '',\n    output: String(bron.output ?? '').slice(0, 49000),\n    forum1: stukken[0] ?? '',\n    forum2: stukken[1] ?? '',\n    forum3: stukken[2] ?? '',\n    forum4: stukken[3] ?? '',\n    tijd: new Date().toISOString(),\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [20, -200],
+      "id": "b2000000-0000-4000-8000-000000000002",
+      "name": "Resultaat klaarzetten"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "VERVANG_DOOR_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "resultaten",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "beurtId": "={{ $json.beurtId }}",
+            "sessionId": "={{ $json.sessionId }}",
+            "output": "={{ $json.output }}",
+            "forum1": "={{ $json.forum1 }}",
+            "forum2": "={{ $json.forum2 }}",
+            "forum3": "={{ $json.forum3 }}",
+            "forum4": "={{ $json.forum4 }}",
+            "tijd": "={{ $json.tijd }}"
+          },
+          "matchingColumns": ["beurtId"],
+          "schema": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [240, -200],
+      "id": "b2000000-0000-4000-8000-000000000003",
+      "name": "Resultaat wegschrijven",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Resultaat klaarzetten": {
+      "main": [[{ "node": "Resultaat wegschrijven", "type": "main", "index": 0 }]]
+    }
+  }
+}
