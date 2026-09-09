@@ -160,18 +160,21 @@
      er niet bij: die voert het gesprek, de rest werkt op de achtergrond. */
   .hero-team{
     border-top:1px solid var(--lijn);background:var(--creme);
-    padding:16px 24px;display:flex;gap:10px;flex-wrap:wrap;
+    padding:16px 18px;display:flex;gap:8px;flex-wrap:wrap;
     align-items:center;justify-content:center;
   }
   .hero-team .aanhef{
-    font-size:12.5px;color:var(--grijs);font-weight:500;
-    width:100%;text-align:center;margin-bottom:2px;
+    font-size:12px;color:var(--grijs);font-weight:600;
+    text-transform:uppercase;letter-spacing:.06em;
+    width:100%;text-align:center;margin-bottom:4px;
   }
-  .hero-team .lid{display:flex;align-items:center;gap:8px;padding:5px 12px 5px 5px;
+  /* Krap gehouden zodat alle zes op een regel passen; springt er anders een
+     in zijn eentje naar de volgende regel. */
+  .hero-team .lid{display:flex;align-items:center;gap:7px;padding:4px 11px 4px 4px;
     background:var(--wit);border:1px solid var(--lijn);border-radius:999px}
-  .hero-team .lid img{width:30px;height:30px}
-  .hero-team .lid .naam{font-size:13px;font-weight:600;line-height:1.2}
-  .hero-team .lid .rol{font-size:11.5px;color:var(--grijs);line-height:1.2}
+  .hero-team .lid img{width:27px;height:27px}
+  .hero-team .lid .naam{font-size:12.5px;font-weight:600;line-height:1.2}
+  .hero-team .lid .rol{font-size:11px;color:var(--grijs);line-height:1.2}
   .hero-kop{
     margin:0 0 18px;
     font-size:clamp(17px,1.9vw,27px);line-height:1.25;font-weight:700;
@@ -671,22 +674,20 @@
     return img;
   }
 
-  // Zet de specialisten onder het welkom. Uit dezelfde TEAM-tabel als de
-  // rest van de pagina, zodat een naam of kleur maar op een plek staat.
+  // Zet het team onder het welkom, Buddy voorop. Uit dezelfde TEAM-tabel als
+  // de rest van de pagina, zodat een naam of kleur maar op een plek staat.
   function tekenTeam() {
     var bak = document.getElementById("hero-team");
     if (!bak) { return; }
-    bak.appendChild(element("div", "aanhef",
-      "Waar het helpt schakelt Buddy een van zijn broertjes of zusjes in"));
-    TEAM.filter(function (lid) { return lid.naam !== BUDDY.naam; })
-      .forEach(function (lid) {
-        var rij = element("div", "lid");
-        rij.appendChild(pop(lid, 34));
-        rij.appendChild(element("div", null,
-          '<div class="naam">' + ontsnap(lid.naam) + "</div>" +
-          '<div class="rol">' + ontsnap(lid.rol) + "</div>"));
-        bak.appendChild(rij);
-      });
+    bak.appendChild(element("div", "aanhef", "Team digitaal programmabureau PRM"));
+    TEAM.forEach(function (lid) {
+      var rij = element("div", "lid");
+      rij.appendChild(pop(lid, 34));
+      rij.appendChild(element("div", null,
+        '<div class="naam">' + ontsnap(lid.naam) + "</div>" +
+        '<div class="rol">' + ontsnap(lid.rol) + "</div>"));
+      bak.appendChild(rij);
+    });
   }
 
   // ---------------------------------------------------------------- markdown
