@@ -106,7 +106,7 @@
     padding:8px 6px 8px 10px;
   }
   .gesprek .titel span{
-    display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    display:block;white-space:normal;overflow-wrap:anywhere;
   }
   .gesprek .titel .wanneer{font-size:11.5px;color:var(--grijs);margin-top:1px}
   .gesprek[data-actief="ja"] .titel{font-weight:600}
@@ -818,6 +818,100 @@
       .replace(/[*`_]/g, "")
       .replace(/\s+/g, " ").trim();
   }
+  // Twee woorden die het gesprek samenvatten, voor in de zijbalk. De vraag zelf
+  // is als titel onbruikbaar: hij is te lang, en de eerste woorden zijn meestal
+  // beleefdheid ("Kun je voor mij...") in plaats van onderwerp.
+  //
+  // Bewust zonder taalmodel: de pagina heeft de vraag al, en een extra aanroep
+  // voor een tussenkopje is die wachttijd en die kosten niet waard.
+  var VULWOORDEN = (
+    "ik je jij jou jouw u we wij ons onze ze zij hij hem haar hun het de een en of " +
+    "maar want dus als dan dat deze die dit er is zijn ben bent was waren word wordt " +
+    "worden werd heb hebt heeft hebben had hadden kan kun kunt kunnen kon konden zou " +
+    "zouden zal zult zullen moet moeten moest mag mogen wil wilt willen wou ga gaan " +
+    "gaat ging doe doen doet deed maak maken maakt geef geven geeft krijg krijgen " +
+    "met voor van op in aan bij om te tot uit over naar door onder boven tussen " +
+    "zonder tegen per af toe ook nog wel niet geen al alle alles iets niets wat wie " +
+    "waar hoe waarom wanneer welke welk hier daar even graag alsjeblieft aub please " +
+    "mij me jullie meer veel weinig heel erg goed beste eens soort aantal paar wat " +
+    "denk denkt vind vindt weet weten zie zien kijk kijken help helpen zoek zoeken " +
+    "vraag vragen antwoord graag mogelijk mogelijkheden willen worden"
+  ).split(" ");
+
+  function isVulwoord(w) {
+    return VULWOORDEN.indexOf(w) !== -1;
+  }
+
+  function kernwoorden(tekst) {
+    // Cijfers en leestekens eruit; koppeltekens blijven, want die horen in
+    // woorden als 'HR-systeem' en 'Zuid-Holland' thuis.
+    var ruw = kaal(tekst).replace(/[^A-Za-zÀ-ÿ\s-]/g, " ").split(/\s+/)
+      .filter(function (w) { return w.length >= 2; });
+
+    // De schrijfwijze uit de vraag onthouden, zodat 'HR-systeem' en
+    // 'Zuid-Holland' hun hoofdletters houden.
+    var schrijfwijze = {};
+    ruw.forEach(function (w) {
+      var k = w.toLowerCase();
+      if (!schrijfwijze[k]) { schrijfwijze[k] = w; }
+    });
+
+    // De schrijfwijze uit de vraag aanhouden, alleen het eerste woord krijgt
+    // een hoofdletter. 'Datagedreven bedrijfsvoering' dus, niet 'Datagedreven
+    // Bedrijfsvoering' - maar 'HR-systeem' en 'Zuid-Holland' blijven staan.
+    function netjes(w, eerste) {
+      var o = schrijfwijze[w] || w;
+      if (!eerste || o !== o.toLowerCase()) { return o; }
+      return o.charAt(0).toUpperCase() + o.slice(1);
+    }
+
+    var woorden = ruw.map(function (w) { return w.toLowerCase(); })
+      .filter(function (w) { return w.length >= 4 && !isVulwoord(w); });
+
+    // Een korte of louter beleefde vraag houdt niets over. Dan liever de eerste
+    // woorden dan een naamloos gesprek: iets is altijd beter te herkennen.
+    if (!woorden.length) {
+      var terugval = ruw.slice(0, 2).map(function (w, i) {
+        return netjes(w.toLowerCase(), i === 0);
+      });
+      return terugval.length ? terugval.join(" ") : "";
+    }
+
+    // Hoe vaker een woord terugkomt, hoe meer het over het onderwerp gaat.
+    // Lengte telt mee omdat samenstellingen ('transportsector') zeggender zijn
+    // dan losse korte woorden.
+    var telling = {};
+    woorden.forEach(function (w) { telling[w] = (telling[w] || 0) + 1; });
+
+    var uniek = [];
+    woorden.forEach(function (w, i) {
+      if (uniek.some(function (u) { return u.woord === w; })) { return; }
+      uniek.push({
+        woord: w,
+        plek: i,
+        score: telling[w] * 1.5 + Math.min(w.length, 14) / 14
+      });
+    });
+
+    uniek.sort(function (a, b) {
+      return b.score - a.score || a.plek - b.plek;
+    });
+
+    // In de volgorde van de vraag zetten: 'Verkenning transportsector' leest
+    // nu eenmaal beter dan 'Transportsector verkenning'.
+    var gekozen = uniek.slice(0, 2).sort(function (a, b) { return a.plek - b.plek; });
+    return gekozen.map(function (k, i) { return netjes(k.woord, i === 0); }).join(" ");
+  }
+
+  // De naam zoals hij in de zijbalk hoort te staan. Zelf hernoemd gaat voor;
+  // anders leiden we hem af, zodat ook gesprekken van voor deze wijziging
+  // meteen een net kopje krijgen.
+  function gesprekNaam(g) {
+    if (g.zelfBenoemd && g.titel) { return g.titel; }
+    var eerste = (g.beurten && g.beurten[0] && g.beurten[0].vraag) || "";
+    return kernwoorden(eerste) || g.titel || "Nieuw gesprek";
+  }
+
   function knip(tekst, lengte) {
     var t = kaal(tekst);
     return t.length > lengte ? t.slice(0, lengte) + "…" : t;
@@ -1042,9 +1136,14 @@
       rij.setAttribute("data-id", g.id);
       if (gesprek && gesprek.id === g.id) { rij.setAttribute("data-actief", "ja"); }
 
+      // Eenmaal bepalen en overal gebruiken, zodat de zijbalk, de knoppen en
+      // de bevestigingsvraag dezelfde naam noemen.
+      var naam = gesprekNaam(g);
+
       var titel = element("button", "titel");
       titel.type = "button";
-      titel.innerHTML = "<span>" + ontsnap(g.titel) + "</span>" +
+      titel.title = (g.beurten && g.beurten[0] && g.beurten[0].vraag) || naam;
+      titel.innerHTML = "<span>" + ontsnap(naam) + "</span>" +
                         '<span class="wanneer">' + ontsnap(wanneer(g.bijgewerkt)) + "</span>";
       titel.addEventListener("click", function () { openGesprek(g.id); });
       rij.appendChild(titel);
@@ -1052,17 +1151,21 @@
       var hernoem = element("button", "mini", "&#9998;");
       hernoem.type = "button";
       hernoem.title = "Hernoemen";
-      hernoem.setAttribute("aria-label", "Gesprek hernoemen: " + g.titel);
+      hernoem.setAttribute("aria-label", "Gesprek hernoemen: " + naam);
       hernoem.addEventListener("click", function () {
-        var naam = window.prompt("Nieuwe naam voor dit gesprek:", g.titel);
-        if (naam === null) { return; }
-        naam = naam.trim();
-        if (!naam) { return; }
+        var gekozen = window.prompt("Nieuwe naam voor dit gesprek:", naam);
+        if (gekozen === null) { return; }
+        gekozen = gekozen.trim();
+        if (!gekozen) { return; }
         var opgeslagen = Opslag.lees(g.id);
         if (!opgeslagen) { return; }
-        opgeslagen.titel = naam.slice(0, 80);
+        opgeslagen.titel = gekozen.slice(0, 80);
+        opgeslagen.zelfBenoemd = true;   // hierna niet meer zelf afleiden
         try { Opslag.schrijf(opgeslagen); } catch (e) { /* naam niet kwijt kunnen: laat staan */ }
-        if (gesprek && gesprek.id === g.id) { gesprek.titel = opgeslagen.titel; }
+        if (gesprek && gesprek.id === g.id) {
+          gesprek.titel = opgeslagen.titel;
+          gesprek.zelfBenoemd = true;
+        }
         tekenLijst();
       });
       rij.appendChild(hernoem);
@@ -1070,16 +1173,16 @@
       var bewaar = element("button", "mini", "&#8595;");
       bewaar.type = "button";
       bewaar.title = "Opslaan als tekstbestand";
-      bewaar.setAttribute("aria-label", "Opslaan als tekstbestand: " + g.titel);
+      bewaar.setAttribute("aria-label", "Opslaan als tekstbestand: " + naam);
       bewaar.addEventListener("click", function () { exporteer(g.id); });
       rij.appendChild(bewaar);
 
       var wis = element("button", "mini", "&#10005;");
       wis.type = "button";
       wis.title = "Verwijderen";
-      wis.setAttribute("aria-label", "Gesprek verwijderen: " + g.titel);
+      wis.setAttribute("aria-label", "Gesprek verwijderen: " + naam);
       wis.addEventListener("click", function () {
-        if (!window.confirm("\"" + g.titel + "\" definitief verwijderen?")) { return; }
+        if (!window.confirm("\"" + naam + "\" definitief verwijderen?")) { return; }
         Opslag.verwijder(g.id);
         if (gesprek && gesprek.id === g.id) { nieuwGesprek(); } else { tekenLijst(); }
       });
@@ -1094,7 +1197,7 @@
     var g = Opslag.lees(id);
     if (!g) { return; }
 
-    var uit = ["# " + g.titel, "", "_Programmabureau PRM · " +
+    var uit = ["# " + gesprekNaam(g), "", "_Programmabureau PRM · " +
                new Date(g.gemaakt).toLocaleString("nl-NL") + "_", ""];
 
     (g.beurten || []).forEach(function (beurt) {
@@ -1293,7 +1396,7 @@
     if (!gesprek) {
       gesprek = {
         id: maakId(),
-        titel: knip(tekst, 48) || "Nieuw gesprek",
+        titel: kernwoorden(tekst) || "Nieuw gesprek",
         gemaakt: Date.now(),
         bijgewerkt: Date.now(),
         beurten: []
