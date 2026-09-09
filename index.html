@@ -241,6 +241,7 @@
   .wachten{display:flex;align-items:center;gap:12px;margin-bottom:26px;font-size:14.5px;color:var(--grijs)}
   .wachten .pop{animation:wieg 2.2s ease-in-out infinite}
   .wachten b{color:var(--inkt);font-weight:600}
+  .wachttoon{margin-top:4px;font-size:13.5px;color:var(--grijs)}
   .stipjes span{
     display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--koraal);
     margin-right:3px;animation:puls 1.3s ease-in-out infinite;
@@ -763,7 +764,8 @@
       '<b>Buddy denkt na</b> en overlegt zo nodig met de specialisten. ' +
       'Bij een uitgebreide vraag duurt dat een minuut of langer. ' +
       '<span id="wachtduur"></span>' +
-      '<span class="stipjes"><span></span><span></span><span></span></span>'));
+      '<span class="stipjes"><span></span><span></span><span></span></span>' +
+      '<div id="wachttoon" class="wachttoon"></div>'));
     draad.appendChild(el);
 
     // Een lopende teller, zodat een wachttijd van minuten niet als vastgelopen oogt.
@@ -773,6 +775,18 @@
       if (!vak) { return; }
       var s = Math.round((Date.now() - start) / 1000);
       vak.textContent = s < 60 ? s + " s " : Math.floor(s / 60) + " min " + (s % 60) + " s ";
+
+      // Bij een uitgebreide onderzoeksvraag valt er minutenlang niets te zien.
+      // Zonder een woord erbij oogt dat als vastgelopen, en dan sluit iemand
+      // het tabblad net voordat het antwoord er is.
+      var toon = document.getElementById("wachttoon");
+      if (toon) {
+        if (s >= 300) {
+          toon.textContent = "Dit is een zware vraag. Buddy werkt nog; laat dit venster open staan.";
+        } else if (s >= 120) {
+          toon.textContent = "Er wordt onderzoek gedaan. Dat duurt bij een brede vraag enkele minuten.";
+        }
+      }
     }, 1000);
 
     naarBeneden();
@@ -1147,7 +1161,25 @@
    *  seconden en daarna elk kwartier-minuutje, in plaats van onafgebroken *
    *  doorvragen.                                                         *
    * ================================================================== */
-  var PEIL_MAX = 10 * 60 * 1000;   // na tien minuten geven we het op
+  var PEIL_MAX = 20 * 60 * 1000;   // hierna houdt de pagina op met vragen
+
+  // Hoe vaak we peilen. Eerst kort op elkaar, omdat de meeste vragen binnen een
+  // minuut klaar zijn; daarna rustiger, omdat elke peiling een run in n8n kost.
+  function peiltempo(verstreken) {
+    if (verstreken < 30000) { return 5000; }
+    if (verstreken < 120000) { return 15000; }
+    return 30000;
+  }
+
+  // Een enkele mislukte peiling zegt niets: een haperend netwerk of een gateway
+  // die even een 502 teruggeeft, komt voor tijdens een wachttijd van minuten.
+  // Zolang de workflow gewoon doorloopt, zou het zonde zijn daarop af te haken.
+  // Alleen fouten die zichzelf nooit oplossen gaan er meteen doorheen.
+  var PEIL_MISSERS = 5;
+
+  function blijvendeFout(fout) {
+    return fout.status === 401 || fout.status === 403 || fout.status === 404;
+  }
 
   // Wordt de vraag meteen al geweigerd, dan is doorpeilen zinloos: er komt
   // nooit een resultaat. Deze belofte lost daarom nooit op, maar breekt de
@@ -1178,16 +1210,28 @@
     var start = Date.now();
     var kopregels = autorisatie ? { Authorization: autorisatie } : {};
 
+    var missers = 0;
+
     return new Promise(function (klaar, mislukt) {
       function nogEens() {
         var verstreken = Date.now() - start;
         if (verstreken > PEIL_MAX) {
-          var op = new Error("na tien minuten was er nog geen antwoord");
+          var op = new Error("na twintig minuten was er nog geen antwoord");
           op.opgegeven = true;
           mislukt(op);
           return;
         }
-        setTimeout(kijken, verstreken < 30000 ? 5000 : 15000);
+        setTimeout(kijken, peiltempo(verstreken));
+      }
+
+      // Mislukte peiling: doorgaan tenzij het er te veel achter elkaar zijn, of
+      // de fout er een is die door wachten niet beter wordt.
+      function hapering(fout) {
+        if (blijvendeFout(fout) || ++missers >= PEIL_MISSERS) {
+          mislukt(fout);
+          return;
+        }
+        nogEens();
       }
 
       function kijken() {
@@ -1217,9 +1261,13 @@
               klaar({ forum: d.forum, advies: advies });
               return;
             }
-            nogEens();   // nog bezig
+            missers = 0;  // er kwam een geldig antwoord, alleen nog niet het onze
+            nogEens();    // nog bezig
           })
-          .catch(mislukt);
+          .catch(function (fout) {
+            if (fout.vanWorkflow) { mislukt(fout); return; }
+            hapering(fout);
+          });
       }
 
       nogEens();
@@ -1344,9 +1392,10 @@
                    "goed aangekomen en n8n heeft erop gereageerd. Kijk in n8n bij Executions bij " +
                    "welke node het misging.";
         } else if (fout.opgegeven) {
-          uitleg = "Buddy was na tien minuten nog niet klaar. De workflow draait in n8n " +
-                   "mogelijk nog door; kijk bij Executions of er alsnog een resultaat komt. " +
-                   "Duurt het structureel zo lang, kort dan het aantal zoekopdrachten van de " +
+          uitleg = "Buddy is er na twintig minuten nog mee bezig, en zolang blijft deze pagina " +
+                   "niet wachten. Het antwoord gaat waarschijnlijk gewoon komen: het wordt " +
+                   "weggeschreven onder kenmerk " + beurtId + ", dus het is terug te vinden. " +
+                   "Duurt het vaker zo lang, kort dan het aantal zoekopdrachten van de " +
                    "Onderzoeker in.";
         } else if (fout.bijPeilen) {
           uitleg = "Het ophalen van het resultaat mislukte: " + fout.message + ". De vraag is " +
