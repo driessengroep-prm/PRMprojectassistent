@@ -92,10 +92,63 @@ fout komt binnen enkele seconden en gaat langs de peiling heen.
    *PRM 2 - Zoekdienst (Perplexity)* uit de lijst. Staat daar een id dat niet bij
    die workflow hoort, dan wordt de zoekdienst nooit aangeroepen en merk je daar
    niets van: de Onderzoeker verzint dan zijn eigen antwoord.
+
+   **Controleer daarna meteen de invoer** — zie hieronder. Opnieuw kiezen uit de
+   dropdown wist namelijk wat je daar had ingevuld.
 3. **Resultaat wegschrijven** — resource *Table*, operatie *Append*, en werkmap,
    werkblad en tabel uit de dropdowns.
 4. **Resultaat klaarzetten** — moet de versie uit dit bestand zijn, die het
    `beurtId` op meerdere plekken zoekt.
+
+## De zoekvraag komt binnen als `null`
+
+Draait PRM 2 wel, maar staat er bij *Zoekvraag ontvangen* `search_query: null`,
+dan is de koppeling van de invoer weg. Je herkent het aan de melding in de node
+*Zoekdienst (Perplexity)*:
+
+> No parameters are set up to be filled by AI.
+
+En aan wat de tool binnenkrijgt: één parameter `query` in plaats van
+`search_query`. Dat is de terugvaloptie van n8n — zonder velden die de agent mag
+invullen, biedt hij er zelf één generieke aan. De Onderzoeker vult die keurig,
+PRM 2 zoekt naar `search_query`, en vindt niets.
+
+Dit gebeurt vanzelf zodra je de workflow opnieuw uit de dropdown kiest: n8n leest
+het invoerschema dan opnieuw in en wist de ingevulde waarden. Herstellen gaat zo:
+
+1. Open in de hoofdworkflow de node *Zoekdienst (Perplexity)*.
+2. Onder **Workflow Inputs** hoort een veld `search_query` te staan. Ontbreekt
+   het, ververs dan eerst het schema met het icoontje naast het Workflow-veld.
+3. Klik op de sterretjesknop naast `search_query`, of zet het veld op Expression
+   en vul in:
+
+   ```
+   {{ $fromAI('search_query', 'Een enkele, scherp geformuleerde zoekvraag voor deskresearch', 'string') }}
+   ```
+
+Een lege zoekvraag geeft verderop trouwens een `Bad request` van Perplexity, niet
+een leeg antwoord — dus zoek bij die foutmelding eerst hier, en niet in de body
+van de HTTP-node.
+
+## De aanroep van Perplexity
+
+De node *Perplexity Agent API* in PRM 2 gebruikt `POST /v1/agent` met een
+`preset` en een `input`-array. Dat is de huidige vorm: `input` is bij de Agent
+API de opvolger van `messages` uit de oude Sonar-API, een array van
+`{role, content}` waarin een `system`-rol is toegestaan, en `fast` is een van de
+geldige presets. De Agent API weigert wel elk veld dat hij niet kent met een 400,
+dus voeg er niets aan toe dat uit de Sonar-tijd stamt.
+
+Zet de zoekvraag in die body niet rauw tussen aanhalingstekens, maar zo:
+
+```
+"content": {{ JSON.stringify($json.search_query || 'geen zoekvraag ontvangen') }}
+```
+
+Zonder aanhalingstekens eromheen — `JSON.stringify` zet die er zelf omheen, en
+ontsnapt meteen een aanhalingsteken of regeleinde in de zoekvraag. Doe je dat
+niet, dan breekt zo'n teken de JSON en krijg je een `Bad request` die er precies
+zo uitziet als die van een lege zoekvraag.
 
 ## Testen, in deze volgorde
 
@@ -138,10 +191,10 @@ ongeschonden terug; daarboven blijft alleen het advies over, zoals bedoeld. Een
 ontbrekende rij geeft `bezig`, onleesbare JSON kost het overleg maar niet het
 advies.
 
-Wat níet is getest, is de aanroep van Perplexity zelf: het adres
-`https://api.perplexity.ai/v1/agent` met een `preset`/`input`-body heeft nog
-nooit gedraaid, omdat de zoekdienst tot nu toe naar een verkeerd workflow-id
-wees. Reken erop dat daar nog een ronde overheen moet.
+De aanroep van Perplexity is niet door mij getest, maar de vorm is wel
+nagetrokken tegen de migratiegids van Perplexity zelf: `POST /v1/agent` met een
+`preset` en een `input`-array klopt. De foutmeldingen die daar tot nu toe uit
+kwamen, kwamen door een lege zoekvraag — zie hierboven.
 
 Ook niet getest is of de velden op de Excel-nodes exact overeenkomen met wat
 jouw n8n-versie verwacht. Loop die na en selecteer werkmap, werkblad en tabel
