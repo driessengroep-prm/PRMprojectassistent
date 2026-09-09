@@ -120,44 +120,86 @@
   .mini:focus-visible{outline:2px solid var(--koraal-diep);outline-offset:1px;opacity:1}
   .leeg{padding:18px 10px;font-size:13px;color:var(--grijs);line-height:1.5}
 
-  .kolom{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+  /* De witte schil (kop, zijbalk, voet) loopt door achter het werkvlak; het
+     crmeveld ligt daar als een afgerond paneel in. Zonder dat botsen de
+     witte vlakken en het crme met harde randen tegen elkaar. */
+  .kolom{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--wit)}
   .sluier{display:none}
 
   /* ---------- welkom ---------- */
-  main{flex:1;overflow-y:auto}
-  .hero{background:var(--creme);padding:40px 24px 0}
+  /* Het werkvlak is een kolom: het welkom staat midden in de vrije ruimte,
+     de draad begint gewoon bovenaan. Zonder dat middenzetten plakt het
+     welkom tegen de kop en blijft er een leeg crmevlak onder staan. */
+  main{
+    flex:1;overflow-y:auto;display:flex;flex-direction:column;
+    background:var(--papier);border:1px solid var(--lijn);border-radius:20px;
+    margin:14px;
+  }
+  .hero{flex:1;display:flex;align-items:center;justify-content:center;padding:32px 24px}
   body[data-gestart="ja"] .hero{display:none}
-  /* Kop en tekst delen een kolom, zodat ze aan beide kanten op elkaar
-     aansluiten in plaats van alleen aan de linkerkant. */
+  /* Een lege draad houdt anders zijn eigen padding en duwt het welkom
+     scheef omhoog: boven blijft er dan minder ruimte over dan onder. */
+  body:not([data-gestart="ja"]) .draad{display:none}
+
+  /* Het welkom staat in dezelfde witte kaart als straks de adviezen. Zo is
+     het crme overal het werkvlak en wit overal de inhoud, in plaats van
+     losse tekst op een leeg vlak. */
+  .hero-binnen{
+    width:100%;max-width:960px;
+    background:var(--wit);border:1px solid var(--lijn);border-radius:26px;
+    box-shadow:0 6px 26px rgba(38,48,47,.07);
+    overflow:hidden;
+  }
+  /* Onderaan een strookje lucht, anders snijdt de streep van de teamstrook
+     dwars door Buddy's voeten. */
+  .hero-boven{padding:40px 20px 14px 44px;display:flex;gap:28px;align-items:flex-end}
+
+  /* De specialisten onder een streep. De tekst erboven belooft broertjes en
+     zusjes met een eigen specialisme; hier staan ze, zodat die belofte niet
+     abstract blijft en de lege ruimte iets te vertellen heeft. Buddy staat
+     er niet bij: die voert het gesprek, de rest werkt op de achtergrond. */
+  .hero-team{
+    border-top:1px solid var(--lijn);background:var(--creme);
+    padding:16px 24px;display:flex;gap:10px;flex-wrap:wrap;
+    align-items:center;justify-content:center;
+  }
+  .hero-team .aanhef{
+    font-size:12.5px;color:var(--grijs);font-weight:500;
+    width:100%;text-align:center;margin-bottom:2px;
+  }
+  .hero-team .lid{display:flex;align-items:center;gap:8px;padding:5px 12px 5px 5px;
+    background:var(--wit);border:1px solid var(--lijn);border-radius:999px}
+  .hero-team .lid img{width:30px;height:30px}
+  .hero-team .lid .naam{font-size:13px;font-weight:600;line-height:1.2}
+  .hero-team .lid .rol{font-size:11.5px;color:var(--grijs);line-height:1.2}
   .hero-kop{
     margin:0 0 18px;
     font-size:clamp(17px,1.9vw,27px);line-height:1.25;font-weight:700;
     color:var(--koraal);letter-spacing:-.02em;
   }
-  .hero-binnen{max-width:1100px;margin:0 auto;display:flex;gap:28px;align-items:flex-end}
   /* De tekst begint bovenaan; alleen Buddy staat op de onderlijn.
      Zonder dit zakt de tekst mee naar beneden en valt er een gat
      tussen de kop en de eerste alinea. */
-  .hero-tekst{flex:1 1 400px;max-width:640px;align-self:flex-start;padding-bottom:44px;min-width:0}
+  .hero-tekst{flex:1 1 380px;max-width:600px;align-self:flex-start;padding-bottom:44px;min-width:0}
   .hero p{margin:0 0 12px;color:#4A5654;font-size:16px}
   .hero p:last-child{margin-bottom:0}
-  .hero-beeld{position:relative;flex:0 0 280px;height:280px;align-self:flex-end;margin-left:auto}
-  .hero-beeld .boog{position:absolute;left:0;bottom:0;width:195px;height:195px}
+  .hero-beeld{position:relative;flex:0 0 260px;height:260px;align-self:flex-end;margin-left:auto}
+  .hero-beeld .boog{position:absolute;left:0;bottom:0;width:180px;height:180px}
   .hero-beeld img{
-    position:absolute;right:0;bottom:0;height:280px;width:auto;
+    position:absolute;right:0;bottom:0;height:260px;width:auto;
     filter:drop-shadow(0 8px 18px rgba(38,48,47,.14));
   }
 
   /* Naast Buddy wordt de tekstkolom onder deze breedte te smal; dan
      zetten we het beeld eronder in plaats van ernaast. */
   @media (max-width:1040px){
-    .hero-binnen{flex-direction:column;align-items:flex-start;gap:0}
+    .hero-boven{flex-direction:column;align-items:flex-start;gap:0;padding:32px 28px 14px}
     .hero-tekst{padding-bottom:24px}
     .hero-beeld{align-self:center;margin-left:0}
   }
 
   /* ---------- draad ---------- */
-  .draad{max-width:820px;margin:0 auto;padding:34px 24px 40px}
+  .draad{flex:none;width:100%;max-width:820px;margin:0 auto;padding:34px 24px 40px}
   .vraag{
     background:var(--teal);color:var(--wit);border-radius:20px 20px 6px 20px;
     padding:13px 18px;margin:0 0 26px auto;max-width:76%;width:fit-content;
@@ -260,7 +302,7 @@
   .storing b{display:block;margin-bottom:3px;color:var(--koraal-diep);font-weight:600}
 
   /* ---------- invoer ---------- */
-  footer{border-top:1px solid var(--lijn);background:var(--wit);padding:16px 24px;flex:none}
+  footer{background:var(--wit);padding:14px 24px 16px;flex:none}
   .invoer{max-width:820px;margin:0 auto;display:flex;gap:11px;align-items:flex-end}
   .invoer textarea{
     flex:1;resize:none;font-family:var(--ui);font-size:15.5px;line-height:1.55;
@@ -364,6 +406,7 @@
     <main>
       <section class="hero">
         <div class="hero-binnen">
+          <div class="hero-boven">
           <div class="hero-tekst">
             <h1 class="hero-kop">Hi PRM-collega!<br>Welkom bij het digitale programmabureau.</h1>
             <p>Ik ben Buddy. Graag help ik jou om van jouw programma of project een succes te maken.</p>
@@ -377,6 +420,8 @@
             </svg>
             <img src="avatars/buddy-vol.png" alt="Buddy, de regisseur van het programmabureau">
           </div>
+          </div>
+          <div class="hero-team" id="hero-team" aria-label="De specialisten"></div>
         </div>
       </section>
 
@@ -624,6 +669,24 @@
     img.alt = lid.naam;
     img.title = lid.naam + " \u2014 " + lid.rol;
     return img;
+  }
+
+  // Zet de specialisten onder het welkom. Uit dezelfde TEAM-tabel als de
+  // rest van de pagina, zodat een naam of kleur maar op een plek staat.
+  function tekenTeam() {
+    var bak = document.getElementById("hero-team");
+    if (!bak) { return; }
+    bak.appendChild(element("div", "aanhef",
+      "Waar het helpt schakelt Buddy een van zijn broertjes of zusjes in"));
+    TEAM.filter(function (lid) { return lid.naam !== BUDDY.naam; })
+      .forEach(function (lid) {
+        var rij = element("div", "lid");
+        rij.appendChild(pop(lid, 34));
+        rij.appendChild(element("div", null,
+          '<div class="naam">' + ontsnap(lid.naam) + "</div>" +
+          '<div class="rol">' + ontsnap(lid.rol) + "</div>"));
+        bak.appendChild(rij);
+      });
   }
 
   // ---------------------------------------------------------------- markdown
@@ -1558,6 +1621,7 @@
 
   document.getElementById("nieuw").addEventListener("click", nieuwGesprek);
 
+  tekenTeam();
   tekenLijst();
   invoer.focus();
 })();
