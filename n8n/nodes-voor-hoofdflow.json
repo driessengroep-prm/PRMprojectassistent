@@ -2,46 +2,45 @@
   "nodes": [
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "{\n  \"status\": \"bezig\"\n}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [-200, -200],
-      "id": "b2000000-0000-4000-8000-000000000001",
-      "name": "Meteen bevestigen"
-    },
-    {
-      "parameters": {
         "jsCode": "// Zet het resultaat klaar voor de workflow 'Resultaat ophalen'.\n// Excel houdt maximaal 32.767 tekens per cel, en een forum met volledige\n// rapporten van Digger gaat daar zo overheen. Daarom knippen we het forum\n// in stukken van 30.000 en zetten die in aparte kolommen.\n\nconst bron = $input.first().json;\nconst trigger = $('When chat message received').first().json;\n\n// Het beurtId komt van de pagina mee in de body. Waar de Chat Trigger dat\n// precies neerzet verschilt per n8n-versie, dus we kijken op de plekken\n// waar het kan staan. Blijft het leeg, dan vindt de peiling de rij nooit -\n// controleer dan in de uitvoering wat de trigger werkelijk teruggeeft.\nconst beurtId =\n  trigger.beurtId ??\n  trigger.body?.beurtId ??\n  trigger.query?.beurtId ??\n  bron.beurtId ??\n  '';\n\nconst sessionId = trigger.sessionId ?? trigger.body?.sessionId ?? bron.sessionId ?? '';\n\nconst CEL = 30000;          // ruim onder de Excel-grens van 32.767\nconst KOLOMMEN = 6;         // samen 180.000 tekens forum\n\nconst forumTekst = JSON.stringify(bron.forum ?? []);\nconst stukken = [];\nfor (let i = 0; i < forumTekst.length; i += CEL) {\n  stukken.push(forumTekst.slice(i, i + CEL));\n}\n\n// Past het echt niet, dan liever het advies zonder overleg dan een\n// afgekapte JSON die straks niet te lezen is.\nif (stukken.length > KOLOMMEN) {\n  stukken.length = 0;\n  stukken.push('[]');\n}\n\nreturn [{\n  json: {\n    beurtId,\n    sessionId,\n    output: String(bron.output ?? '').slice(0, CEL),\n    forum1: stukken[0] ?? '',\n    forum2: stukken[1] ?? '',\n    forum3: stukken[2] ?? '',\n    forum4: stukken[3] ?? '',\n    forum5: stukken[4] ?? '',\n    forum6: stukken[5] ?? '',\n    tijd: new Date().toISOString(),\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [20, -200],
+      "position": [
+        -200,
+        -200
+      ],
       "id": "b2000000-0000-4000-8000-000000000002",
       "name": "Resultaat klaarzetten"
     },
     {
       "parameters": {
-        "resource": "worksheet",
+        "resource": "table",
         "operation": "append",
         "workbook": {
           "__rl": true,
-          "value": "VERVANG_DOOR_WORKBOOK",
+          "value": "VERVANG_DOOR_WERKMAP",
           "mode": "id"
         },
         "worksheet": {
           "__rl": true,
-          "value": "resultaten",
-          "mode": "name"
+          "value": "VERVANG_DOOR_WERKBLAD",
+          "mode": "id"
         },
-        "dataMode": "autoMapInputData",
+        "table": {
+          "__rl": true,
+          "value": "VERVANG_DOOR_TABEL",
+          "mode": "id"
+        },
+        "dataMode": "autoMap",
         "options": {}
       },
       "type": "n8n-nodes-base.microsoftExcel",
       "typeVersion": 2.1,
-      "position": [240, -200],
+      "position": [
+        20,
+        -200
+      ],
       "id": "b2000000-0000-4000-8000-000000000003",
       "name": "Resultaat wegschrijven",
       "retryOnFail": true,
@@ -51,7 +50,15 @@
   ],
   "connections": {
     "Resultaat klaarzetten": {
-      "main": [[{ "node": "Resultaat wegschrijven", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Resultaat wegschrijven",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   }
 }

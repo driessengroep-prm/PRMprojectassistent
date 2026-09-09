@@ -1133,9 +1133,9 @@
    *  RESULTAAT APART OPHALEN                                            *
    *                                                                     *
    *  Duurt een vraag langer dan de gateway van n8n toestaat, dan wordt   *
-   *  de verbinding afgekapt terwijl de workflow gewoon doorloopt. In die *
-   *  opzet antwoordt n8n meteen en vraagt de pagina daarna zelf om het   *
-   *  resultaat, net zolang tot het klaar is.                             *
+   *  de verbinding afgekapt terwijl de workflow gewoon doorloopt. De     *
+   *  pagina laat die verbinding daarom los zodra de vraag verstuurd is,   *
+   *  en haalt het resultaat hier op, net zolang tot het klaar is.        *
    *                                                                     *
    *  De resultaat-URL krijgt beurtId als queryparameter en hoort terug   *
    *  te geven:                                                           *
@@ -1148,6 +1148,31 @@
    *  doorvragen.                                                         *
    * ================================================================== */
   var PEIL_MAX = 10 * 60 * 1000;   // na tien minuten geven we het op
+
+  // Wordt de vraag meteen al geweigerd, dan is doorpeilen zinloos: er komt
+  // nooit een resultaat. Deze belofte lost daarom nooit op, maar breekt de
+  // peiling wel af zodra zo'n weigering binnenkomt.
+  //
+  // Een verbroken verbinding tellen we alleen mee als die vroeg komt. Later is
+  // dat juist het normale beeld: de gateway kapt af, de workflow loopt door.
+  var VROEG = 5000;
+
+  function vroegeAfwijzing(verzending, begonnen) {
+    return new Promise(function (nooit, afwijzen) {
+      verzending.then(
+        function (res) {
+          if (!res.ok) {
+            var pech = new Error("n8n antwoordde met status " + res.status);
+            pech.status = res.status;   // zodat de uitleg hieronder kan aansluiten
+            afwijzen(pech);
+          }
+        },
+        function (netwerkfout) {
+          if (Date.now() - begonnen < VROEG) { afwijzen(netwerkfout); }
+        }
+      );
+    });
+  }
 
   function peilen(resultaatUrl, beurtId, autorisatie) {
     var start = Date.now();
@@ -1253,7 +1278,7 @@
     var resultaatUrl = resultaatVeld.value.trim();
     if (resultaatUrl) { Webhook.schrijfResultaat(resultaatUrl); }
 
-    fetch(url, {
+    var verzending = fetch(url, {
       method: "POST",
       headers: kopregels,
       body: JSON.stringify({
@@ -1262,28 +1287,47 @@
         chatInput: tekst,
         beurtId: beurtId
       })
-    })
-      .then(function (res) {
-        if (!res.ok) {
-          var pech = new Error("n8n antwoordde met status " + res.status);
-          pech.status = res.status;   // zodat de uitleg hieronder kan aansluiten
-          throw pech;
-        }
-        return res.json();
-      })
-      .then(function (data) {
-        var d = uitpakken(data);
-        var advies = adviesUit(d.forum, d.output || d.text || "");
-        // Kwam het antwoord meteen mee, dan tonen we dat gewoon. Zo blijft de
-        // pagina werken met een chat trigger die pas antwoordt als hij klaar is.
-        if (advies || (Array.isArray(d.forum) && d.forum.length)) {
-          return { forum: d.forum, advies: advies };
-        }
-        if (!resultaatUrl) {
+    });
+
+    var wachten;
+    if (resultaatUrl) {
+      // Met een resultaat-URL doet het antwoord op deze POST er niet toe. Bij
+      // een lange vraag verbreekt de gateway van n8n Cloud die verbinding toch
+      // rond de honderd seconden, terwijl de workflow gewoon doorloopt en het
+      // resultaat wegschrijft. We halen het daar op in plaats van hier te
+      // wachten. Zo maakt het ook niet meer uit hoe de chat trigger antwoordt.
+      //
+      // Eén ding mag niet verdwijnen: gaat het verzoek er meteen al uit, dan
+      // is er echt iets mis (verkeerd wachtwoord, workflow niet actief) en
+      // heeft peilen geen zin. Dat gaat hieronder langs de peiling heen.
+      wachten = Promise.race([
+        vroegeAfwijzing(verzending, begonnen),
+        peilen(resultaatUrl, beurtId, kopregels.Authorization)
+      ]);
+    } else {
+      // Zonder resultaat-URL blijft het bij één verzoek: de chat trigger moet
+      // dan zelf het antwoord teruggeven, en dus klaar zijn binnen de tijd die
+      // de gateway toestaat.
+      wachten = verzending
+        .then(function (res) {
+          if (!res.ok) {
+            var pech = new Error("n8n antwoordde met status " + res.status);
+            pech.status = res.status;   // zodat de uitleg hieronder kan aansluiten
+            throw pech;
+          }
+          return res.json();
+        })
+        .then(function (data) {
+          var d = uitpakken(data);
+          var advies = adviesUit(d.forum, d.output || d.text || "");
+          if (advies || (Array.isArray(d.forum) && d.forum.length)) {
+            return { forum: d.forum, advies: advies };
+          }
           throw new Error("n8n gaf een leeg antwoord terug");
-        }
-        return peilen(resultaatUrl, beurtId, kopregels.Authorization);
-      })
+        });
+    }
+
+    wachten
       .then(function (r) {
         toonAntwoord(r.forum, r.advies);
         gesprek.beurten.push({ vraag: tekst, forum: r.forum || null, advies: r.advies });
@@ -1330,8 +1374,9 @@
                     "staat achter een gateway die een verbinding na ongeveer honderd seconden " +
                     "verbreekt. De workflow draait daar waarschijnlijk gewoon door: kijk in n8n bij " +
                     "Executions — de kans is groot dat de run als geslaagd staat en het antwoord er " +
-                    "wél is. Alleen kon deze pagina het niet meer ontvangen. Kort het onderzoek in, " +
-                    "of laat de workflow direct antwoorden en het resultaat apart ophalen.";
+                    "wél is. Alleen kon deze pagina het niet meer ontvangen. Vul onder Instellingen " +
+                    "een resultaat-URL in; dan laat de pagina deze verbinding los en haalt ze het " +
+                    "antwoord daarna apart op, hoe lang het ook duurt.";
         } else if (/Failed to fetch|NetworkError|Load failed/i.test(fout.message)) {
           uitleg += "Er kwam geen bruikbaar antwoord terug. Meestal betekent dit dat de workflow " +
                     "onderweg is vastgelopen op een node — kijk in n8n bij Executions welke node " +
