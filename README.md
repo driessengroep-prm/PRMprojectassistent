@@ -46,6 +46,20 @@ In n8n moet daarnaast:
 - **Response Mode** op *When Last Node Finishes*;
 - de laatste node *Forumweergave* zijn, die `output` en `forum` teruggeeft.
 
+## Lange vragen
+
+n8n Cloud staat achter een gateway die een verbinding na ongeveer honderd
+seconden verbreekt. Een uitgebreide onderzoeksvraag duurt langer, en dan is het
+antwoord wél gemaakt maar kan de pagina het niet meer ontvangen.
+
+Vul daarvoor onder **Instellingen** ook een **Resultaat-URL** in. De pagina laat
+de verbinding dan los zodra de vraag verstuurd is, en haalt het antwoord daarna
+apart op — net zolang tot het klaar staat, tot maximaal tien minuten. Hoe je die
+tweede workflow opzet staat in [`n8n/LEESMIJ.md`](n8n/LEESMIJ.md).
+
+Zonder resultaat-URL blijft de pagina gewoon op het antwoord wachten. Dat werkt
+prima voor korte vragen.
+
 ## Toegang beperken
 
 GitHub Pages is openbaar. De pagina zelf bevat niets gevoeligs, maar wie de
