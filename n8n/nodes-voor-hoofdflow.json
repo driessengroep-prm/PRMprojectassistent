@@ -46,6 +46,29 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c3000000-0000-4000-8000-000000000001",
+              "name": "output",
+              "value": "=Er ging onderweg iets mis, waardoor ik je vraag niet heb kunnen afmaken. Je vraag zelf is wel goed aangekomen.\n\nProbeer hem opnieuw te stellen. Ging het om een brede onderzoeksvraag, maak hem dan wat smaller — dat scheelt stappen en daarmee de kans dat er onderweg iets hapert.\n\nBlijft het misgaan, geef dit dan door aan de beheerder:\n\n> {{ $json.error?.message || $json.error || 'geen technische melding beschikbaar' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -200,
+        -20
+      ],
+      "id": "b2000000-0000-4000-8000-000000000004",
+      "name": "Antwoord bij storing"
     }
   ],
   "connections": {
@@ -54,6 +77,17 @@
         [
           {
             "node": "Resultaat wegschrijven",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Antwoord bij storing": {
+      "main": [
+        [
+          {
+            "node": "Resultaat klaarzetten",
             "type": "main",
             "index": 0
           }

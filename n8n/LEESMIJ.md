@@ -50,6 +50,15 @@ dan verandert het adres van de chat.
   **Append**, Data Mode op **Auto-Map Input Data**. De veldnamen uit de
   Code-node komen dan overeen met de kopteksten. Kies werkmap, werkblad en tabel
   uit de dropdowns; in het bestand staan tijdelijke aanduidingen.
+- **Antwoord bij storing** — vangt een vastgelopen run op. Zet op de node
+  *Regisseur programmabureau PRM* onder Settings de optie **On Error** op
+  *Continue (using error output)*, en verbind die tweede, rode uitgang met deze
+  node. Zie [Ook een storing hoort een antwoord op te
+  leveren](#ook-een-storing-hoort-een-antwoord-op-te-leveren).
+
+Let bij het maken van de koprij op **spaties**. Auto-Map koppelt op exacte naam:
+een kop `sessionId ` met een spatie erachter blijft leeg, zonder dat er iets
+misgaat of iets van gemeld wordt.
 
 ## `resultaat-ophalen.json`
 
@@ -149,6 +158,30 @@ Zonder aanhalingstekens eromheen — `JSON.stringify` zet die er zelf omheen, en
 ontsnapt meteen een aanhalingsteken of regeleinde in de zoekvraag. Doe je dat
 niet, dan breekt zo'n teken de JSON en krijg je een `Bad request` die er precies
 zo uitziet als die van een lege zoekvraag.
+
+## Ook een storing hoort een antwoord op te leveren
+
+Loopt de Regisseur vast — een agent die crasht, een quotum dat op is — dan wordt
+er niets weggeschreven. De pagina blijft dan peilen tot ze het opgeeft, en de
+gebruiker ziet twintig minuten later een melding zonder inhoud. Dat is de
+slechtste uitkomst: lang wachten én niets.
+
+Beter is dat een storing net zo goed een rij oplevert, met een leesbare
+uitleg in `output` in plaats van een advies. De pagina toont die dan gewoon als
+antwoord, binnen dezelfde seconden als anders.
+
+Zo zet je dat op:
+
+1. Open de node *Regisseur programmabureau PRM*, ga naar **Settings** en zet
+   **On Error** op *Continue (using error output)*. De node krijgt er dan een
+   tweede uitgang bij.
+2. Verbind die tweede uitgang met **Antwoord bij storing** (staat in
+   `nodes-voor-hoofdflow.json`).
+3. Die node zet een `output` met de uitleg en laat `forum` leeg, en gaat verder
+   naar *Resultaat klaarzetten* — dezelfde weg als een geslaagd antwoord.
+
+De gebruiker krijgt dan geen technische foutmelding maar een gewoon bericht:
+wat er misging, dat de vraag is aangekomen, en wat hij kan proberen.
 
 ## Testen, in deze volgorde
 
