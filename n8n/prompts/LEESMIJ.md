@@ -20,10 +20,19 @@ hij zou het kunnen, het klinkt goed, en het is fout.
 herleidbaar. Daarom gaat elke feitelijke vraag naar de Onderzoeker.
 
 **De PID.** Wat hij weet over projectinitiatiedocumenten komt uit andere
-organisaties en andere methodieken, niet uit PRM. De Projectinitiator en de Toetser
-putten wél uit de eigen database van PRM. Daarom gaat elke vraag over de opbouw,
-de inhoud of de volledigheid van de PID naar een van die twee — vooruitkijkende
-vragen naar de Projectinitiator, terugkijkende naar de Toetser.
+organisaties en andere methodieken, niet uit PRM. Aan de eigen database van PRM —
+met het vaste template, de checklist en de bijbehorende documenten — hangen drie
+agents:
+
+| agent | stadium | rol rond de PID |
+|---|---|---|
+| Projectinitiator | PID moet nog gebouwd worden | vooruitkijkend: wat moet erin, wat moet ik doen om er te komen |
+| Toetser | er ligt materiaal | terugkijkend: is het compleet, wat ontbreekt |
+| PIDtcher | het document moet geschreven worden | schrijft de PID op het vaste template, en de pitch |
+
+De regisseur schrijft de PID dus nooit zelf. Hij levert het dossier, de PIDtcher
+levert het document. Vaste volgorde bij een schrijfverzoek: eerst de Toetser
+(wat is gedekt), dan de PIDtcher (schrijven).
 
 Beide regels zijn expres absoluut geformuleerd ("zonder uitzondering", "twijfel je,
 dan is het er een"). Een regel met ruimte erin wordt bij een korte vraag als eerste
