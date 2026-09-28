@@ -1,0 +1,46 @@
+# Publiceert de Projectenassistent naar prm-projectassistent.driessengroep.nl.
+#
+# Er is geen build: de pagina is één index.html plus plaatjes. Publiceren is die
+# bestanden over SSH naar de server zetten; Caddy op de buddy-production VM serveert ze
+# uit /data/caddy/apps/prm-projectassistent. Er draait daar geen applicatie.
+name: Deploy naar prm-projectassistent.driessengroep.nl
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: vm
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sleutel klaarzetten
+        # Base64 en niet de sleutel zelf: bij het plakken van een privésleutel in een secret
+        # sneuvelt de laatste regelovergang makkelijk, en dan faalt hij met "error in libcrypto".
+        #
+        #   base64 -i ~/prm-deploy | pbcopy
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" | base64 -d > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null || {
+            echo "::error::De sleutel in VM_SSH_KEY is niet te lezen."
+            echo "Zet hem base64-gecodeerd: base64 -i ~/prm-deploy | pbcopy"
+            exit 1
+          }
+          ssh-keyscan -H 40.115.59.118 >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Publiceren
+        run: ./scripts/publiceer.sh
+
+      - name: Controleren
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 https://prm-projectassistent.driessengroep.nl/)
+          echo "https://prm-projectassistent.driessengroep.nl/ → HTTP $code"
+          [ "$code" = "200" ]
