@@ -409,17 +409,6 @@
       var account = (terug && terug.account) || app.getAllAccounts()[0];
       if (!account) { return app.loginRedirect({ scopes: scopes }); }
       app.setActiveAccount(account);
-
-      // Wie er is ingelogd, zodat de pagina dat mee kan sturen naar n8n en het
-      // gesprek daar aan een persoon hangt. De oid is het enige kenmerk dat
-      // niet verandert: een naam of e-mailadres kan wijzigen, de oid niet.
-      window.PRM_GEBRUIKER = {
-        oid: (account.idTokenClaims && account.idTokenClaims.oid) ||
-             account.localAccountId || account.homeAccountId || "",
-        naam: account.name || "",
-        email: account.username || ""
-      };
-
       html.classList.remove("inloggen");
     })
     .catch(mislukt);
@@ -1055,26 +1044,6 @@
     return kernwoorden(eerste) || g.titel || "Nieuw gesprek";
   }
 
-  // Wat er per vraag naar n8n gaat. De ingelogde gebruiker gaat mee zodat n8n
-  // het gesprek aan een persoon kan hangen; lokaal (file:// of localhost) wordt
-  // het inloggen overgeslagen en is er niemand, dan laten we het veld weg.
-  //
-  // Alleen de identiteit gaat mee, nooit een token: n8n heeft niets aan een
-  // Microsoft-token en het zou onnodig rondreizen.
-  function vraagBericht(tekst, sessieId, beurtId) {
-    var bericht = {
-      action: "sendMessage",
-      sessionId: sessieId,
-      chatInput: tekst,
-      beurtId: beurtId
-    };
-    var wie = window.PRM_GEBRUIKER;
-    if (wie && wie.oid) {
-      bericht.gebruiker = { oid: wie.oid, naam: wie.naam || "", email: wie.email || "" };
-    }
-    return bericht;
-  }
-
   function knip(tekst, lengte) {
     var t = kaal(tekst);
     return t.length > lengte ? t.slice(0, lengte) + "…" : t;
@@ -1595,7 +1564,12 @@
     var verzending = fetch(url, {
       method: "POST",
       headers: kopregels,
-      body: JSON.stringify(vraagBericht(tekst, gesprek.id, beurtId))
+      body: JSON.stringify({
+        action: "sendMessage",
+        sessionId: gesprek.id,
+        chatInput: tekst,
+        beurtId: beurtId
+      })
     });
 
     var wachten;
