@@ -345,7 +345,75 @@
     footer{padding:12px 16px}
     .invoer button{padding:13px 20px}
   }
+  /* Tot het inloggen gelukt is blijft de pagina leeg; zie INLOGGEN hieronder. */
+  html.inloggen body{visibility:hidden}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script>
+/* ------------------------------------------------------------------ *
+ *  INLOGGEN                                                           *
+ *                                                                     *
+ *  Alleen wie een Driessen-account heeft, krijgt de pagina te zien.   *
+ *  Op een werklaptop die al ingelogd is merk je daar niets van.       *
+ *                                                                     *
+ *  Dit is een slot in de browser, geen slot op de server: de HTML     *
+ *  zelf is voor iedereen op te vragen. De webhook bewaakt n8n dus     *
+ *  nog steeds zelf, met Basic Auth op de Chat Trigger.                *
+ *                                                                     *
+ *  Client-id en tenant zijn geen geheimen. Het adres van deze pagina  *
+ *  moet als redirect-URI in de app-registratie staan (platform:       *
+ *  toepassing met één pagina), anders weigert Microsoft de omleiding. *
+ *  Lokaal (file:// of localhost) wordt het inloggen overgeslagen.     *
+ * ------------------------------------------------------------------ */
+(function () {
+  "use strict";
+  var ENTRA_CLIENT_ID = "cb2c6818-aff1-4b27-b84b-df3373b158a1";
+  var ENTRA_TENANT_ID = "67052f8b-2d27-450e-a658-59143add5525";
+
+  var lokaal = location.protocol === "file:" ||
+               location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  if (lokaal) { return; }
+
+  var html = document.documentElement;
+  html.classList.add("inloggen");
+
+  function mislukt(fout) {
+    console.error("Inloggen mislukt:", fout);
+    html.classList.remove("inloggen");
+    document.body.innerHTML =
+      '<p style="font-family:Poppins,sans-serif;padding:40px;max-width:560px">' +
+      'Inloggen bij Microsoft lukte niet. Ververs de pagina om het opnieuw te proberen.</p>';
+  }
+
+  if (!window.msal) {
+    document.addEventListener("DOMContentLoaded", function () {
+      mislukt(new Error("msal-browser is niet geladen"));
+    });
+    return;
+  }
+
+  var scopes = ["openid", "profile"];
+  var app = new msal.PublicClientApplication({
+    auth: {
+      clientId: ENTRA_CLIENT_ID,
+      authority: "https://login.microsoftonline.com/" + ENTRA_TENANT_ID,
+      redirectUri: location.origin + "/"
+    },
+    // Gesprekken staan ook in localStorage; wie ze kan lezen, mag ook ingelogd blijven.
+    cache: { cacheLocation: "localStorage" }
+  });
+
+  app.initialize()
+    .then(function () { return app.handleRedirectPromise(); })
+    .then(function (terug) {
+      var account = (terug && terug.account) || app.getAllAccounts()[0];
+      if (!account) { return app.loginRedirect({ scopes: scopes }); }
+      app.setActiveAccount(account);
+      html.classList.remove("inloggen");
+    })
+    .catch(mislukt);
+})();
+</script>
 </head>
 <body>
 

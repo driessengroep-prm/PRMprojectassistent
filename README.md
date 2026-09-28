@@ -6,14 +6,57 @@ voerde, en daarna pas zijn advies.
 
 Draait als losse HTML-pagina, zonder build en zonder afhankelijkheden.
 
+## Waar de pagina draait
+
+https://prm-projectassistent.driessengroep.nl — alleen voor wie een Driessen-account heeft.
+Inloggen gaat via Microsoft; op een werklaptop die al ingelogd is merk je daar niets van.
+Lokaal (`file://` of `localhost`) wordt het inloggen overgeslagen.
+
+Het inloggen is een slot in de browser, geen slot op de server: de HTML zelf is voor
+iedereen op te vragen. De webhook bewaakt n8n dus nog steeds zelf; zie
+[Toegang beperken](#toegang-beperken).
+
 ## Publiceren
 
-De pagina staat als `index.html` in de root. Zet in **Settings → Pages** de source op
-`Deploy from a branch`, branch `main`, folder `/ (root)`. Na een minuut staat hij op:
+Een push naar `main` publiceert vanzelf (`.github/workflows/deploy-vm.yml`). Met de hand
+kan ook, met SSH-toegang tot de VM:
 
+```bash
+./scripts/publiceer.sh
 ```
-https://driessengroep-prm.github.io/PRMprojectassistent/
-```
+
+Caddy op de buddy-production VM serveert de bestanden uit
+`/data/caddy/apps/prm-projectassistent`; er draait daar geen applicatie.
+
+Wat er eenmalig moet staan:
+
+- een A-record `prm-projectassistent.driessengroep.nl` → `40.115.59.118`
+- op de VM: `mkdir -p /data/caddy/apps/prm-projectassistent` en dit blok in de Caddyfile
+  (daarna Caddy herladen):
+
+  ```
+  prm-projectassistent.driessengroep.nl {
+  	root * /data/apps/prm-projectassistent
+  	encode gzip
+  	file_server
+  	header /index.html Cache-Control "no-cache"
+  	log {
+  		output file /var/log/caddy/prm-projectassistent-access.log
+  		format json
+  	}
+  }
+  ```
+
+- het repository-secret `VM_SSH_KEY` — een privésleutel waarmee de workflow bij
+  `buddy-admin@40.115.59.118` kan, base64-gecodeerd: `base64 -i ~/prm-deploy | pbcopy`
+- `https://prm-projectassistent.driessengroep.nl/` als redirect-URI (platform
+  *Toepassing met één pagina*) in de Entra-app-registratie
+  `cb2c6818-aff1-4b27-b84b-df3373b158a1` — dezelfde die Coco gebruikt
+- bij de Chat Trigger in n8n onder **Allowed Origins (CORS)**:
+  `https://prm-projectassistent.driessengroep.nl`
+
+Is het subdomein in de lucht, zet GitHub Pages dan uit (**Settings → Pages**). Daar staat
+de pagina zonder login.
 
 ## Koppelen aan n8n
 
@@ -29,7 +72,7 @@ eerst opent, plakt de URL dus zelf één keer.
 
 Twee alternatieven:
 
-1. Meegeven in de adresbalk: `...github.io/PRMprojectassistent/?webhook=https://...`
+1. Meegeven in de adresbalk: `prm-projectassistent.driessengroep.nl/?webhook=https://...`
    Dat wint van wat er onthouden is. Handig als bladwijzer of om even een tweede
    workflow te testen.
 2. Vastzetten in `index.html`, in `STANDAARD_WEBHOOK` bovenaan het script. Dan
@@ -42,7 +85,7 @@ In n8n moet daarnaast:
 
 - de workflow **actief** staan;
 - bij de Chat Trigger onder **Allowed Origins (CORS)** de waarde
-  `https://driessengroep-prm.github.io` staan (of `*` tijdens testen);
+  `https://prm-projectassistent.driessengroep.nl` staan (of `*` tijdens testen);
 - **Response Mode** op *When Last Node Finishes*;
 - de laatste node *Forumweergave* zijn, die `output` en `forum` teruggeeft.
 
@@ -62,7 +105,7 @@ prima voor korte vragen.
 
 ## Toegang beperken
 
-GitHub Pages is openbaar. De pagina zelf bevat niets gevoeligs, maar wie de
+De pagina zelf bevat niets gevoeligs, maar wie de
 webhook-URL heeft, kan de workflow aanroepen en verbruikt jouw executions en tokens.
 
 Zet daarom bij de Chat Trigger **Authentication** op *Basic Auth* en koppel een
@@ -72,9 +115,9 @@ refresh typ je ze opnieuw.
 
 ## Twee dingen die het vaakst misgaan
 
-**Mixed content.** GitHub Pages draait op https. Staat n8n op `http://`, dan blokkeert
+**Mixed content.** De pagina draait op https. Staat n8n op `http://`, dan blokkeert
 de browser het verzoek voordat het verstuurd wordt. n8n moet dan achter https.
 
 **Bereikbaarheid.** Het verzoek gaat vanuit de browser van de bezoeker, niet vanuit
-GitHub. Een n8n die alleen op het interne netwerk draait, werkt dus prima voor wie op
+de server. Een n8n die alleen op het interne netwerk draait, werkt dus prima voor wie op
 dat netwerk zit — en voor niemand anders.
