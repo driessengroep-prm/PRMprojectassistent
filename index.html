@@ -1463,6 +1463,10 @@
       // de fout er een is die door wachten niet beter wordt.
       function hapering(fout) {
         if (blijvendeFout(fout) || ++missers >= PEIL_MISSERS) {
+          // Ook een netwerkfout hoort als peilfout gemeld te worden. Zonder dit
+          // raakt die markering kwijt en wijst de uitleg naar de chat trigger,
+          // terwijl het juist de resultaat-URL is die niet meewerkt.
+          fout.bijPeilen = true;
           mislukt(fout);
           return;
         }
@@ -1633,10 +1637,13 @@
                    "Duurt het vaker zo lang, kort dan het aantal zoekopdrachten van de " +
                    "Onderzoeker in.";
         } else if (fout.bijPeilen) {
-          uitleg = "Het ophalen van het resultaat mislukte: " + fout.message + ". De vraag is " +
-                   "wel verstuurd en draait waarschijnlijk gewoon in n8n. Controleer de " +
-                   "resultaat-URL onder Instellingen, en of daar dezelfde Allowed Origins (CORS) " +
-                   "en authenticatie staan als bij de chat trigger.";
+          uitleg = "Je vraag is verstuurd en draait waarschijnlijk gewoon in n8n — alleen het " +
+                   "ophalen van het antwoord mislukte: " + fout.message + ". Het probleem zit " +
+                   "dus bij de resultaat-URL, niet bij de chat trigger. Controleer die URL onder " +
+                   "Instellingen, en kijk in de workflow 'Resultaat ophalen' of bij de webhook " +
+                   "onder Allowed Origins (CORS) " + location.origin + " staat. Sla op en zet de " +
+                   "workflow daarna uit en weer aan, anders blijft de oude waarde actief. " +
+                   "Open F12 en kijk bij Console: daar staat precies welk adres n8n terugstuurt.";
         } else if (location.protocol === "https:" && /^http:/i.test(url)) {
           uitleg += "Deze pagina draait op https en de webhook op http. Browsers blokkeren dat. " +
                     "Zet n8n achter https, of open deze pagina lokaal via http.";
