@@ -1,0 +1,109 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://buddy.driessengroep.nl/data/gebruikers?on_conflict=entra_oid",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Profile",
+              "value": "app_prm_projectassistent"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  entra_oid: $('When chat message received').first().json.gebruiker?.oid\n          ?? $('When chat message received').first().json.body?.gebruiker?.oid ?? '',\n  naam:  $('When chat message received').first().json.gebruiker?.naam  ?? '',\n  email: $('When chat message received').first().json.gebruiker?.email ?? '',\n  laatst_actief: new Date().toISOString()\n}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -420,
+        -200
+      ],
+      "id": "d4000000-0000-4000-8000-000000000000",
+      "name": "Gebruiker vastleggen",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Zet het resultaat klaar voor 'Beurt wegschrijven'.\n//\n// Dit vervangt de Excel-versie. Daar werd het forum in zes stukken geknipt omdat\n// een Excel-cel maximaal 32.767 tekens houdt; Postgres kent die grens niet, dus\n// het forum gaat in een keer mee als jsonb.\n\nconst bron = $input.first().json;\nconst trigger = $('When chat message received').first().json;\n\n// Waar de Chat Trigger de velden uit de body neerzet, verschilt per n8n-versie.\n// Daarom kijken we op de plekken waar ze kunnen staan.\nconst uitTrigger = (naam) =>\n  trigger[naam] ?? trigger.body?.[naam] ?? trigger.query?.[naam] ?? bron[naam] ?? '';\n\nconst gebruiker = trigger.gebruiker ?? trigger.body?.gebruiker ?? {};\n\nreturn [{\n  json: {\n    beurtId:   uitTrigger('beurtId'),\n    sessionId: uitTrigger('sessionId'),\n    entra_oid: gebruiker.oid ?? '',\n    vraag:     uitTrigger('chatInput'),\n    output:    String(bron.output ?? ''),\n    forum:     bron.forum ?? [],\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        -200
+      ],
+      "id": "d4000000-0000-4000-8000-000000000009",
+      "name": "Resultaat klaarzetten (Buddy)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://buddy.driessengroep.nl/data/beurten",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Profile",
+              "value": "app_prm_projectassistent"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  beurt_id:  $json.beurtId,\n  sessie_id: $json.sessionId,\n  entra_oid: $json.entra_oid,\n  vraag:     $json.vraag,\n  advies:    $json.output,\n  forum:     $json.forum,\n  klaar_op:  new Date().toISOString()\n}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        -200
+      ],
+      "id": "d4000000-0000-4000-8000-000000000008",
+      "name": "Beurt wegschrijven",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Resultaat klaarzetten (Buddy)": {
+      "main": [
+        [
+          {
+            "node": "Beurt wegschrijven",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
