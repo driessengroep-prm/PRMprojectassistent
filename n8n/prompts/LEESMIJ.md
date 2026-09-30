@@ -11,6 +11,36 @@ dan ook in de node; wijzig je iets in de node, zet het dan hier terug.
 |---|---|
 | `regisseur.md` | *Regisseur programmabureau PRM* (PRM 1) |
 
+## De keuze snel of grondig
+
+De pagina stuurt bij elke vraag een veld `modus` mee, met `snel` of `grondig`.
+De gebruiker kiest dat onderin het scherm; grondig is de standaard.
+
+**Dat werkt pas als n8n het doorgeeft aan de regisseur.** Eenmalig instellen:
+
+1. Open in PRM 1 de node *Regisseur programmabureau PRM*.
+2. Zet **Source for Prompt (User Message)** van *Take from previous node
+   automatically* op **Define below**.
+3. Vul in het tekstveld deze expressie in:
+
+   ```
+   {{ $json.chatInput }}
+
+   [Werkwijze voor deze vraag: {{ $json.modus === 'snel' ? 'snel' : 'grondig' }}]
+   ```
+
+Zonder stap 2 en 3 komt de keuze wel binnen bij de workflow, maar ziet de
+regisseur hem niet en verandert er niets aan zijn gedrag.
+
+Waar de winst zit: de Onderzoeker doet standaard **vijf** zoekopdrachten, elk met
+wachttijd en een timeout. Daar komen die drie minuten vandaan. In de stand *snel*
+draagt de regisseur hem op er hooguit twee te doen.
+
+Let op wat er in de prompt bewust **niet** staat: dat *snel* betekent dat hij
+feiten zelf mag invullen. De regels over onderzoeksvragen en de PID gelden ook
+dan. Snel gaat over minder breedte, niet over minder zorgvuldigheid — anders
+ruil je wachttijd in voor verzonnen antwoorden.
+
 ## Waarom de harde regels erin staan
 
 Twee dingen mag de regisseur niet zelf invullen, en allebei om dezelfde reden:
