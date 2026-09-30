@@ -263,6 +263,14 @@
     padding:20px 24px;box-shadow:var(--schaduw);
   }
 
+  .naarword{
+    margin-top:18px;background:transparent;border:1.5px solid var(--lijn);border-radius:999px;
+    font-family:var(--ui);font-size:13px;font-weight:600;color:var(--grijs);
+    padding:6px 16px;cursor:pointer;
+  }
+  .naarword:hover{border-color:var(--teal);color:var(--teal);background:var(--creme)}
+  .naarword:focus-visible{outline:2px solid var(--koraal-diep);outline-offset:2px}
+
   /* ---------- bronnen ---------- */
   .bronnen{margin-top:20px;padding-top:16px;border-top:1px solid var(--lijn)}
   .bronnen h4{
@@ -1564,6 +1572,15 @@
     kaart.appendChild(element("div", "doc", naarHtml(adviestekst)));
     var bronnen = bronnenBlok(bronnenUit(forum, adviestekst));
     if (bronnen) { kaart.appendChild(bronnen); }
+
+    var haal = element("button", "naarword", "&#8595; Download als Word");
+    haal.type = "button";
+    haal.addEventListener("click", function () {
+      var naam = gesprek ? gesprekNaam(gesprek) : "Advies";
+      bewaarBestand(adviesAlsWord(adviestekst, forum, naam), bestandsnaam(naam, ".docx"));
+    });
+    kaart.appendChild(haal);
+
     blok.appendChild(kaart);
 
     draad.appendChild(blok);
@@ -1714,8 +1731,8 @@
 
       var bewaar = element("button", "mini", "&#8595;");
       bewaar.type = "button";
-      bewaar.title = "Opslaan als tekstbestand";
-      bewaar.setAttribute("aria-label", "Opslaan als tekstbestand: " + naam);
+      bewaar.title = "Hele gesprek downloaden als Word";
+      bewaar.setAttribute("aria-label", "Hele gesprek downloaden als Word: " + naam);
       bewaar.addEventListener("click", function () { exporteer(g.id); });
       rij.appendChild(bewaar);
 
@@ -1732,6 +1749,295 @@
 
       lijstBak.appendChild(rij);
     });
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  WORD-DOCUMENT MAKEN                                                 *
+   *                                                                     *
+   *  Een .docx is een zip met XML erin. We zetten die hier zelf in       *
+   *  elkaar, net als bij het lezen van een meegestuurd Word-bestand.     *
+   *  Zonder inpakken: opgeslagen mag ook, en een advies van een paar     *
+   *  honderd kilobyte hoeft niet kleiner. Scheelt een bibliotheek.       *
+   * ------------------------------------------------------------------ */
+  var CRC_TABEL = (function () {
+    var t = new Uint32Array(256), c, n, k;
+    for (n = 0; n < 256; n++) {
+      c = n;
+      for (k = 0; k < 8; k++) { c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); }
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+
+  function crc32(bytes) {
+    var c = 0xFFFFFFFF;
+    for (var i = 0; i < bytes.length; i++) { c = CRC_TABEL[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); }
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function zipMaak(bestanden) {
+    var coder = new TextEncoder();
+    var delen = [], catalogus = [], plek = 0;
+
+    bestanden.forEach(function (b) {
+      var naam = coder.encode(b.naam);
+      var data = coder.encode(b.inhoud);
+      var som = crc32(data);
+
+      var kop = new DataView(new ArrayBuffer(30));
+      kop.setUint32(0, 0x04034b50, true);
+      kop.setUint16(4, 20, true);
+      kop.setUint16(8, 0, true);        // 0 = opgeslagen, niet ingepakt
+      kop.setUint16(12, 0x21, true);    // 1 januari 1980; nul is geen geldige datum
+      kop.setUint32(14, som, true);
+      kop.setUint32(18, data.length, true);
+      kop.setUint32(22, data.length, true);
+      kop.setUint16(26, naam.length, true);
+      delen.push(new Uint8Array(kop.buffer), naam, data);
+
+      var cat = new DataView(new ArrayBuffer(46));
+      cat.setUint32(0, 0x02014b50, true);
+      cat.setUint16(4, 20, true);
+      cat.setUint16(6, 20, true);
+      cat.setUint16(10, 0, true);
+      cat.setUint16(14, 0x21, true);
+      cat.setUint32(16, som, true);
+      cat.setUint32(20, data.length, true);
+      cat.setUint32(24, data.length, true);
+      cat.setUint16(28, naam.length, true);
+      cat.setUint32(42, plek, true);
+      catalogus.push(new Uint8Array(cat.buffer), naam);
+
+      plek += 30 + naam.length + data.length;
+    });
+
+    var catLengte = catalogus.reduce(function (n, d) { return n + d.length; }, 0);
+    var slot = new DataView(new ArrayBuffer(22));
+    slot.setUint32(0, 0x06054b50, true);
+    slot.setUint16(8, bestanden.length, true);
+    slot.setUint16(10, bestanden.length, true);
+    slot.setUint32(12, catLengte, true);
+    slot.setUint32(16, plek, true);
+
+    return new Blob(delen.concat(catalogus, [new Uint8Array(slot.buffer)]),
+                    { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+  }
+
+  function xmlTekst(t) {
+    return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;");
+  }
+
+  // --- van markdown naar de opmaaktaal van Word ---------------------------
+  var WOORD_INLINE =
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<)\]]+)|\*\*([^*]+)\*\*|`([^`]+)`|\*([^*\n]+)\*/g;
+
+  function woordRun(tekst, opmaak) {
+    var eigenschappen = (opmaak.vet ? "<w:b/>" : "") + (opmaak.cursief ? "<w:i/>" : "") +
+      (opmaak.code ? '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>' : "");
+    return "<w:r>" + (eigenschappen ? "<w:rPr>" + eigenschappen + "</w:rPr>" : "") +
+           '<w:t xml:space="preserve">' + xmlTekst(tekst) + "</w:t></w:r>";
+  }
+
+  function woordRegel(tekst, verwijzingen) {
+    var uit = "", laatst = 0, m;
+    WOORD_INLINE.lastIndex = 0;
+    while ((m = WOORD_INLINE.exec(tekst)) !== null) {
+      if (m.index > laatst) { uit += woordRun(tekst.slice(laatst, m.index), {}); }
+      if (m[2] || m[3]) {
+        var adres = (m[2] || m[3]).replace(STAARTTEKENS, "");
+        var label = m[1] || adres;
+        var id = "hl" + (verwijzingen.length + 1);
+        verwijzingen.push({ id: id, adres: adres });
+        uit += '<w:hyperlink r:id="' + id + '"><w:r><w:rPr>' +
+               '<w:rStyle w:val="Hyperlink"/></w:rPr>' +
+               '<w:t xml:space="preserve">' + xmlTekst(label) + "</w:t></w:r></w:hyperlink>";
+        // Een leesteken dat tegen een kaal adres aan plakte hoort erbuiten.
+        var staart = (m[3] || "").slice(adres.length);
+        if (staart) { uit += woordRun(staart, {}); }
+      } else if (m[4]) { uit += woordRun(m[4], { vet: true }); }
+      else if (m[5]) { uit += woordRun(m[5], { code: true }); }
+      else if (m[6]) { uit += woordRun(m[6], { cursief: true }); }
+      laatst = m.index + m[0].length;
+    }
+    if (laatst < tekst.length) { uit += woordRun(tekst.slice(laatst), {}); }
+    return uit;
+  }
+
+  function woordAlinea(tekst, verwijzingen, stijl, lijst) {
+    var pPr = "";
+    if (stijl) { pPr += '<w:pStyle w:val="' + stijl + '"/>'; }
+    if (lijst) {
+      pPr += '<w:pStyle w:val="ListParagraph"/>';
+      pPr += '<w:numPr><w:ilvl w:val="' + (lijst.diepte || 0) + '"/>' +
+             '<w:numId w:val="' + lijst.nummer + '"/></w:numPr>';
+    }
+    return "<w:p>" + (pPr ? "<w:pPr>" + pPr + "</w:pPr>" : "") +
+           woordRegel(tekst, verwijzingen) + "</w:p>";
+  }
+
+  function markdownNaarWoord(ruw, verwijzingen) {
+    var uit = [];
+    String(ruw || "").split(/\r?\n/).forEach(function (regel) {
+      var kaalRegel = regel.replace(/\s+$/, "");
+      if (!kaalRegel.trim()) { return; }
+
+      var inspring = (kaalRegel.match(/^\s*/) || [""])[0].length;
+      var t = kaalRegel.trim();
+
+      var kop = t.match(/^(#{1,3})\s+(.*)$/);
+      if (kop) { uit.push(woordAlinea(kop[2], verwijzingen, "Heading" + kop[1].length)); return; }
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { return; }
+      var citaat = t.match(/^>\s?(.*)$/);
+      if (citaat) { uit.push(woordAlinea(citaat[1], verwijzingen, "Quote")); return; }
+      var punt = t.match(/^[-*+]\s+(.*)$/);
+      if (punt) {
+        uit.push(woordAlinea(punt[1], verwijzingen, null,
+          { nummer: 1, diepte: Math.min(2, Math.floor(inspring / 2)) }));
+        return;
+      }
+      var genummerd = t.match(/^\d+[.)]\s+(.*)$/);
+      if (genummerd) {
+        uit.push(woordAlinea(genummerd[1], verwijzingen, null,
+          { nummer: 2, diepte: Math.min(2, Math.floor(inspring / 3)) }));
+        return;
+      }
+      uit.push(woordAlinea(t, verwijzingen));
+    });
+    return uit.join("");
+  }
+
+  var WOORD_STIJLEN =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+    '<w:docDefaults><w:rPrDefault><w:rPr>' +
+    '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/>' +
+    "</w:rPr></w:rPrDefault>" +
+    '<w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault>' +
+    "</w:docDefaults>" +
+    // Zonder een Normal-stijl heeft een gewone alinea nergens houvast. Word
+    // vult dat zelf aan, maar andere lezers niet; dan valt de opmaak weg.
+    '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/>' +
+    '<w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="60"/></w:pPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>' +
+    '<w:pPr><w:spacing w:before="320" w:after="120"/><w:outlineLvl w:val="0"/></w:pPr>' +
+    '<w:rPr><w:b/><w:color w:val="1C5A54"/><w:sz w:val="36"/></w:rPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/>' +
+    '<w:pPr><w:spacing w:before="280" w:after="100"/><w:outlineLvl w:val="1"/></w:pPr>' +
+    '<w:rPr><w:b/><w:color w:val="1C5A54"/><w:sz w:val="30"/></w:rPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/>' +
+    '<w:pPr><w:spacing w:before="240" w:after="80"/><w:outlineLvl w:val="2"/></w:pPr>' +
+    '<w:rPr><w:b/><w:color w:val="1C5A54"/><w:sz w:val="26"/></w:rPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/>' +
+    '<w:pPr><w:spacing w:before="120" w:after="120"/><w:ind w:left="480"/></w:pPr>' +
+    '<w:rPr><w:i/><w:color w:val="55625F"/></w:rPr></w:style>' +
+    '<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/>' +
+    '<w:rPr><w:color w:val="1C5A54"/><w:u w:val="single"/></w:rPr></w:style>' +
+    "</w:styles>";
+
+  function woordNiveaus(opmaak) {
+    var uit = "";
+    for (var i = 0; i < 3; i++) {
+      uit += '<w:lvl w:ilvl="' + i + '"><w:start w:val="1"/>' +
+             '<w:numFmt w:val="' + opmaak.soort + '"/>' +
+             '<w:lvlText w:val="' + opmaak.tekst(i) + '"/>' +
+             '<w:lvlJc w:val="left"/><w:pPr><w:ind w:left="' + (360 + i * 360) +
+             '" w:hanging="360"/></w:pPr>' +
+             (opmaak.soort === "bullet"
+               ? '<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/></w:rPr>' : "") +
+             "</w:lvl>";
+    }
+    return uit;
+  }
+
+  var WOORD_NUMMERING =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+    '<w:abstractNum w:abstractNumId="0"><w:multiLevelType w:val="hybridMultilevel"/>' +
+    woordNiveaus({ soort: "bullet", tekst: function () { return ""; } }) +
+    "</w:abstractNum>" +
+    '<w:abstractNum w:abstractNumId="1"><w:multiLevelType w:val="hybridMultilevel"/>' +
+    woordNiveaus({ soort: "decimal", tekst: function (i) { return "%" + (i + 1) + "."; } }) +
+    "</w:abstractNum>" +
+    '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
+    '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>' +
+    "</w:numbering>";
+
+  function maakWordBestand(lichaamXml, verwijzingen) {
+    var rels =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Target="styles.xml" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"/>' +
+      '<Relationship Id="rId2" Target="numbering.xml" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering"/>' +
+      verwijzingen.map(function (v) {
+        return '<Relationship Id="' + v.id + '" Target="' + xmlTekst(v.adres) +
+               '" TargetMode="External" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"/>';
+      }).join("") +
+      "</Relationships>";
+
+    return zipMaak([
+      { naam: "[Content_Types].xml", inhoud:
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+        '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' +
+        "</Types>" },
+      { naam: "_rels/.rels", inhoud:
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Target="word/document.xml" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"/>' +
+        "</Relationships>" },
+      { naam: "word/_rels/document.xml.rels", inhoud: rels },
+      { naam: "word/styles.xml", inhoud: WOORD_STIJLEN },
+      { naam: "word/numbering.xml", inhoud: WOORD_NUMMERING },
+      { naam: "word/document.xml", inhoud:
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
+        ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+        "<w:body>" + lichaamXml +
+        '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
+        '<w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417"/></w:sectPr>' +
+        "</w:body></w:document>" }
+    ]);
+  }
+
+  function bewaarBestand(blob, naam) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = naam;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function bestandsnaam(tekst, achtervoegsel) {
+    var kern = String(tekst || "").replace(/[^\wÀ-ſ -]/g, "").trim().slice(0, 60) || "advies";
+    return kern + achtervoegsel;
+  }
+
+  // Het advies van één beurt als Word-document, met de bronnen eronder.
+  function adviesAlsWord(advies, forum, titel) {
+    var verwijzingen = [];
+    var lichaam = woordAlinea(titel || "Advies", verwijzingen, "Heading1") +
+                  woordAlinea("Programmabureau PRM · " +
+                              new Date().toLocaleDateString("nl-NL"), verwijzingen, "Quote") +
+                  markdownNaarWoord(advies, verwijzingen);
+
+    var bronnen = bronnenUit(forum, advies);
+    if (bronnen.length) {
+      lichaam += woordAlinea("Bronnen", verwijzingen, "Heading2");
+      bronnen.forEach(function (bron) {
+        lichaam += woordAlinea("[" + (bron.titel || bron.domein) + "](" + bron.url + ")",
+                               verwijzingen, null, { nummer: 2, diepte: 0 });
+      });
+    }
+    return maakWordBestand(lichaam, verwijzingen);
   }
 
   // ---------------------------------------------------------------- exporteren
@@ -1778,18 +2084,12 @@
       }
     });
 
-    // gesprekNaam() en niet g.titel: bij een gesprek zonder eigen naam leidt
-    // die tot een lege bestandsnaam of een fout.
-    var naam = gesprekNaam(g).replace(/[^\wÀ-ſ -]/g, "").trim().slice(0, 60) || "gesprek";
-    var blob = new Blob([uit.join("\n")], { type: "text/markdown;charset=utf-8" });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = naam + ".md";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    // Het hele gesprek is hierboven als markdown opgebouwd; dezelfde omzetter
+    // die het advies naar Word brengt, doet dit ook.
+    var verwijzingen = [];
+    var lichaam = markdownNaarWoord(uit.join("\n"), verwijzingen);
+    bewaarBestand(maakWordBestand(lichaam, verwijzingen),
+                  bestandsnaam(gesprekNaam(g), ".docx"));
   }
 
   // n8n levert zijn antwoord soms als array, soms verpakt in json.
