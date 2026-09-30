@@ -590,7 +590,7 @@
           &#128206; Bestand meesturen
         </button>
         <input type="file" id="bestand" multiple hidden
-               accept=".txt,.md,.markdown,.csv,.docx,text/plain,text/markdown,text/csv,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+               accept=".txt,.md,.markdown,.csv,.docx,.pdf,application/pdf,text/plain,text/markdown,text/csv,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
       </div>
       <div class="bijlagen" id="bijlagen" hidden></div>
     </footer>
@@ -1219,6 +1219,78 @@
       .then(function (bytes) { return uitWordXml(new TextDecoder().decode(bytes)); });
   }
 
+  /* --- pdf -------------------------------------------------------------- *
+   *  Voor pdf bestaat geen ingebouwde weg; dat vraagt pdf.js. Die wordt pas
+   *  opgehaald zodra iemand werkelijk een pdf kiest, zodat de pagina voor
+   *  iedereen die dat nooit doet niets extra's laadt.
+   * ---------------------------------------------------------------------- */
+  var PDF_VERSIE = "3.11.174";
+  var PDF_BASIS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@" + PDF_VERSIE + "/build/";
+  var pdfBezig = null;
+
+  function pdfLaden() {
+    if (window.pdfjsLib) { return Promise.resolve(window.pdfjsLib); }
+    if (pdfBezig) { return pdfBezig; }
+    pdfBezig = new Promise(function (klaar, mislukt) {
+      var script = document.createElement("script");
+      script.src = PDF_BASIS + "pdf.min.js";
+      script.onload = function () {
+        if (!window.pdfjsLib) { mislukt(new Error("pdf-lezer laadde niet")); return; }
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_BASIS + "pdf.worker.min.js";
+        klaar(window.pdfjsLib);
+      };
+      script.onerror = function () {
+        pdfBezig = null;
+        mislukt(new Error("pdf-lezer kon niet worden opgehaald"));
+      };
+      document.head.appendChild(script);
+    });
+    return pdfBezig;
+  }
+
+  // De tekstlaag van een pdf is een verzameling losse stukjes met coördinaten.
+  // Stukjes op dezelfde hoogte horen bij dezelfde regel; een sprong omlaag is
+  // een nieuwe regel. Zonder die groepering wordt het één lange brij.
+  function pdfPaginaTekst(inhoud) {
+    var regels = [];
+    var huidig = null;
+    inhoud.items.forEach(function (stuk) {
+      if (typeof stuk.str !== "string") { return; }
+      var hoogte = Math.round(stuk.transform[5]);
+      if (!huidig || Math.abs(huidig.hoogte - hoogte) > 2) {
+        huidig = { hoogte: hoogte, delen: [] };
+        regels.push(huidig);
+      }
+      huidig.delen.push(stuk.str);
+    });
+    return regels
+      .map(function (r) { return r.delen.join("").replace(/\s+/g, " ").trim(); })
+      .filter(function (r) { return r; })
+      .join("\n");
+  }
+
+  function leesPdf(bestand) {
+    return pdfLaden()
+      .then(function (lib) { return bestand.arrayBuffer().then(function (buf) {
+        return lib.getDocument({ data: buf, disableWorker: false }).promise;
+      }); })
+      .then(function (doc) {
+        var beurten = [];
+        for (var n = 1; n <= doc.numPages; n++) {
+          beurten.push(doc.getPage(n).then(function (pagina) {
+            return pagina.getTextContent().then(pdfPaginaTekst);
+          }));
+        }
+        return Promise.all(beurten).then(function (paginas) {
+          var tekst = paginas.filter(function (t) { return t; }).join("\n\n");
+          if (!tekst.trim()) {
+            throw new Error("geen tekst in deze pdf — is het een scan?");
+          }
+          return tekst;
+        });
+      });
+  }
+
   function leesBestand(bestand) {
     var naam = bestand.name || "bestand";
     var laag = naam.toLowerCase();
@@ -1226,11 +1298,8 @@
     if (bestand.size > BIJLAGE_MAX_BYTES) {
       return Promise.resolve({ naam: naam, fout: "groter dan 10 MB" });
     }
-    if (/\.pdf$/.test(laag)) {
-      return Promise.resolve({ naam: naam, fout: "pdf kan nog niet — sla op als Word of plak de tekst" });
-    }
-
     var lezer = /\.docx$/.test(laag) ? leesWord(bestand)
+              : /\.pdf$/.test(laag) ? leesPdf(bestand)
               : /\.(txt|md|markdown|csv)$/.test(laag) ? leesAlsTekst(bestand)
               : null;
     if (!lezer) {
@@ -1876,9 +1945,67 @@
            woordRegel(tekst, verwijzingen) + "</w:p>";
   }
 
+  function tabelCellen(regel) {
+    return regel.trim().replace(/^\|/, "").replace(/\|$/, "")
+                .split("|").map(function (c) { return c.trim(); });
+  }
+
+  function isScheiding(regel) {
+    return /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(regel) && regel.indexOf("-") !== -1;
+  }
+
+  function woordTabel(rijen, verwijzingen) {
+    var kolommen = rijen[0].length;
+    var breedte = Math.floor(9060 / kolommen);
+    var xml = '<w:tbl><w:tblPr><w:tblStyle w:val="Tabel"/>' +
+              '<w:tblW w:w="5000" w:type="pct"/></w:tblPr><w:tblGrid>' +
+              new Array(kolommen + 1).join('<w:gridCol w:w="' + breedte + '"/>') +
+              "</w:tblGrid>";
+    rijen.forEach(function (rij, i) {
+      xml += "<w:tr>";
+      for (var k = 0; k < kolommen; k++) {
+        var inhoud = rij[k] === undefined ? "" : rij[k];
+        xml += '<w:tc><w:tcPr><w:tcW w:w="' + breedte + '" w:type="dxa"/>' +
+               (i === 0 ? '<w:shd w:val="clear" w:fill="FDF1E7"/>' : "") +
+               "</w:tcPr><w:p>" +
+               (i === 0 ? "<w:pPr><w:rPr><w:b/></w:rPr></w:pPr>" : "") +
+               (i === 0 ? woordRun(inhoud.replace(/\*\*/g, ""), { vet: true })
+                        : woordRegel(inhoud, verwijzingen)) +
+               "</w:p></w:tc>";
+      }
+      xml += "</w:tr>";
+    });
+    // Word wil na een tabel een alinea; anders plakken twee tabellen aaneen.
+    return xml + "</w:tbl><w:p/>";
+  }
+
   function markdownNaarWoord(ruw, verwijzingen) {
     var uit = [];
-    String(ruw || "").split(/\r?\n/).forEach(function (regel) {
+    var regels = String(ruw || "").split(/\r?\n/);
+
+    for (var i = 0; i < regels.length; i++) {
+      var regel = regels[i];
+
+      // Een tabel herken je pas aan de scheidingsregel eronder.
+      if (/^\s*\|.*\|\s*$/.test(regel) && isScheiding(regels[i + 1] || "")) {
+        var rijen = [tabelCellen(regel)];
+        i += 2;
+        while (i < regels.length && /^\s*\|.*\|\s*$/.test(regels[i])) {
+          rijen.push(tabelCellen(regels[i]));
+          i++;
+        }
+        i--;
+        uit.push(woordTabel(rijen, verwijzingen));
+        continue;
+      }
+
+      verwerkRegel(regel, uit, verwijzingen);
+    }
+    return uit.join("");
+  }
+
+  function verwerkRegel(regel, uit, verwijzingen) {
+    (function (regel) {
       var kaalRegel = regel.replace(/\s+$/, "");
       if (!kaalRegel.trim()) { return; }
 
@@ -1889,7 +2016,11 @@
       if (kop) { uit.push(woordAlinea(kop[2], verwijzingen, "Heading" + kop[1].length)); return; }
       if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { return; }
       var citaat = t.match(/^>\s?(.*)$/);
-      if (citaat) { uit.push(woordAlinea(citaat[1], verwijzingen, "Quote")); return; }
+      if (citaat) {
+        var open = /^\**\s*openstaand/i.test(citaat[1]);
+        uit.push(woordAlinea(citaat[1], verwijzingen, open ? "Openstaand" : "Quote"));
+        return;
+      }
       var punt = t.match(/^[-*+]\s+(.*)$/);
       if (punt) {
         uit.push(woordAlinea(punt[1], verwijzingen, null,
@@ -1903,8 +2034,7 @@
         return;
       }
       uit.push(woordAlinea(t, verwijzingen));
-    });
-    return uit.join("");
+    })(regel);
   }
 
   var WOORD_STIJLEN =
@@ -1932,6 +2062,23 @@
     '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/>' +
     '<w:pPr><w:spacing w:before="120" w:after="120"/><w:ind w:left="480"/></w:pPr>' +
     '<w:rPr><w:i/><w:color w:val="55625F"/></w:rPr></w:style>' +
+    // Openstaande punten moeten in een concept-PID meteen opvallen; dat is
+    // het eerste waar iemand naar zoekt voordat hij het rondstuurt.
+    '<w:style w:type="table" w:styleId="Tabel"><w:name w:val="Table Grid"/>' +
+    '<w:tblPr><w:tblBorders>' +
+    '<w:top w:val="single" w:sz="4" w:color="EAE4DC"/>' +
+    '<w:left w:val="single" w:sz="4" w:color="EAE4DC"/>' +
+    '<w:bottom w:val="single" w:sz="4" w:color="EAE4DC"/>' +
+    '<w:right w:val="single" w:sz="4" w:color="EAE4DC"/>' +
+    '<w:insideH w:val="single" w:sz="4" w:color="EAE4DC"/>' +
+    '<w:insideV w:val="single" w:sz="4" w:color="EAE4DC"/>' +
+    '</w:tblBorders></w:tblPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Openstaand"><w:name w:val="Openstaand punt"/>' +
+    '<w:basedOn w:val="Normal"/><w:pPr>' +
+    '<w:pBdr><w:left w:val="single" w:sz="18" w:space="8" w:color="E85A32"/></w:pBdr>' +
+    '<w:shd w:val="clear" w:fill="FDF1E7"/><w:spacing w:before="120" w:after="120"/>' +
+    '<w:ind w:left="240"/></w:pPr>' +
+    '<w:rPr><w:b/><w:color w:val="C43F22"/></w:rPr></w:style>' +
     '<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/>' +
     '<w:rPr><w:color w:val="1C5A54"/><w:u w:val="single"/></w:rPr></w:style>' +
     "</w:styles>";
@@ -2022,11 +2169,32 @@
   }
 
   // Het advies van één beurt als Word-document, met de bronnen eronder.
+  // Een stuk met veel koppen is een document en geen berichtje; daar hoort een
+  // inhoudsopgave bij. Word vult die pas bij 'Veld bijwerken', dus dat staat
+  // er als aanwijzing in.
+  function inhoudsopgave() {
+    return '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr>' +
+           '<w:r><w:t>Inhoud</w:t></w:r></w:p>' +
+           '<w:p><w:fldSimple w:instr=\' TOC \\o "1-3" \\h \\z \\u \'>' +
+           '<w:r><w:rPr><w:i/><w:color w:val="6B7877"/></w:rPr>' +
+           '<w:t xml:space="preserve">Klik hier met rechts en kies ' +
+           '‘Veld bijwerken’ om de inhoudsopgave te vullen.</w:t>' +
+           "</w:r></w:fldSimple></w:p>";
+  }
+
+  function aantalKoppen(ruw) {
+    return (String(ruw || "").match(/^#{1,3}\s+/gm) || []).length;
+  }
+
   function adviesAlsWord(advies, forum, titel) {
     var verwijzingen = [];
-    var lichaam = woordAlinea(titel || "Advies", verwijzingen, "Heading1") +
+    // Begint het stuk zelf met een titel - zoals een PID doet - dan zetten we
+    // er geen tweede boven. Anders krijg je twee koppen die elkaar tegenspreken.
+    var eigenTitel = /^\s*#\s+/.test(String(advies || ""));
+    var lichaam = (eigenTitel ? "" : woordAlinea(titel || "Advies", verwijzingen, "Heading1")) +
                   woordAlinea("Programmabureau PRM · " +
                               new Date().toLocaleDateString("nl-NL"), verwijzingen, "Quote") +
+                  (aantalKoppen(advies) >= 3 ? inhoudsopgave() : "") +
                   markdownNaarWoord(advies, verwijzingen);
 
     var bronnen = bronnenUit(forum, advies);
@@ -2087,7 +2255,9 @@
     // Het hele gesprek is hierboven als markdown opgebouwd; dezelfde omzetter
     // die het advies naar Word brengt, doet dit ook.
     var verwijzingen = [];
-    var lichaam = markdownNaarWoord(uit.join("\n"), verwijzingen);
+    var alles = uit.join("\n");
+    var lichaam = (aantalKoppen(alles) >= 3 ? inhoudsopgave() : "") +
+                  markdownNaarWoord(alles, verwijzingen);
     bewaarBestand(maakWordBestand(lichaam, verwijzingen),
                   bestandsnaam(gesprekNaam(g), ".docx"));
   }
