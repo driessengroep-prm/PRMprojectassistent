@@ -32,6 +32,28 @@ De gebruiker kiest dat onderin het scherm; grondig is de standaard.
 Zonder stap 2 en 3 komt de keuze wel binnen bij de workflow, maar ziet de
 regisseur hem niet en verandert er niets aan zijn gedrag.
 
+## Meegestuurde bestanden
+
+De pagina leest een meegestuurd bestand zelf uit en stuurt alleen de tekst mee,
+als `bijlagen`: een lijst van `{ naam, tekst }`. Er wordt niets opgeslagen — het
+hoort bij die ene vraag. Ondersteund zijn `.txt`, `.md`, `.csv` en `.docx`; een
+tekst boven de 40.000 tekens wordt afgekapt, met een zichtbare melding eronder.
+
+Ook dit moet in dezelfde prompt-expressie terechtkomen, anders ziet de regisseur
+het niet. De volledige expressie op de node *Regisseur programmabureau PRM*,
+inclusief de werkwijze uit de vorige paragraaf:
+
+```
+{{ $json.chatInput }}
+
+[Werkwijze voor deze vraag: {{ $json.modus === 'snel' ? 'snel' : 'grondig' }}]
+
+{{ ($json.bijlagen || []).map(b => `--- MEEGESTUURD STUK: ${b.naam} ---\n${b.tekst}`).join('\n\n') }}
+```
+
+Staat er niets meegestuurd, dan levert het laatste blok een lege regel op en
+verandert er niets.
+
 Waar de winst zit: de Onderzoeker doet standaard **vijf** zoekopdrachten, elk met
 wachttijd en een timeout. Daar komen die drie minuten vandaan. In de stand *snel*
 draagt de regisseur hem op er hooguit twee te doen.
