@@ -341,20 +341,28 @@
   footer{background:var(--wit);padding:14px 24px 16px;flex:none}
   .invoer{max-width:820px;margin:0 auto;display:flex;gap:11px;align-items:flex-end}
 
-  /* ---------- snel of grondig ---------- */
-  .werkwijze{max-width:820px;margin:9px auto 0;display:flex;gap:7px}
+  /* ---------- snel of grondig ---------- *
+     Twee soorten knoppen, en dat mag je zien: links een keuze tussen twee
+     standen, rechts een losse handeling. Daarom leest de keuze als één
+     schakelaar - de twee helften in een gezamenlijk vakje, de gekozen helft
+     gevuld - en heeft de knop ernaast de koraalkleur van een actie.          */
+  .werkwijze{max-width:820px;margin:10px auto 0;display:flex;gap:10px;align-items:center}
+  .standen{
+    display:flex;gap:3px;padding:3px;flex:none;
+    background:var(--creme);border:1.5px solid var(--lijn);border-radius:999px;
+  }
   .werkwijze .stand{
     flex:none;display:flex;align-items:baseline;gap:7px;cursor:pointer;
-    background:transparent;border:1.5px solid var(--lijn);border-radius:999px;
-    font-family:var(--ui);font-size:13px;font-weight:600;color:var(--grijs);
-    padding:5px 14px;
+    background:transparent;border:0;border-radius:999px;
+    font-family:var(--ui);font-size:13px;font-weight:600;color:var(--inkt);
+    padding:5px 15px;
   }
   .werkwijze .stand span{font-weight:400;font-size:11.5px;color:var(--grijs)}
-  .werkwijze .stand:hover{border-color:var(--goud)}
+  .werkwijze .stand:hover:not([aria-checked="true"]){background:var(--wit)}
   .werkwijze .stand[aria-checked="true"]{
-    border-color:var(--teal);background:var(--creme);color:var(--teal);
+    background:var(--teal);color:var(--wit);box-shadow:0 1px 4px rgba(28,90,84,.28);
   }
-  .werkwijze .stand[aria-checked="true"] span{color:var(--teal);opacity:.75}
+  .werkwijze .stand[aria-checked="true"] span{color:var(--wit);opacity:.8}
   .werkwijze .stand:focus-visible{outline:2px solid var(--koraal-diep);outline-offset:2px}
   @media (max-width:560px){
     .werkwijze .stand span{display:none}
@@ -363,10 +371,11 @@
   /* ---------- meegestuurde bestanden ---------- */
   .knop-bijlage{
     margin-left:auto;flex:none;cursor:pointer;
-    background:transparent;border:1.5px solid var(--lijn);border-radius:999px;
-    font-family:var(--ui);font-size:13px;font-weight:600;color:var(--grijs);padding:5px 14px;
+    background:var(--wit);border:1.5px solid var(--koraal);border-radius:999px;
+    font-family:var(--ui);font-size:13px;font-weight:600;color:var(--koraal-diep);
+    padding:7px 16px;
   }
-  .knop-bijlage:hover{border-color:var(--goud);color:var(--teal)}
+  .knop-bijlage:hover{background:var(--koraal-diep);border-color:var(--koraal-diep);color:var(--wit)}
   .knop-bijlage:focus-visible{outline:2px solid var(--koraal-diep);outline-offset:2px}
   .bijlagen{max-width:820px;margin:9px auto 0;display:flex;gap:7px;flex-wrap:wrap}
   .bijlage{
@@ -579,13 +588,15 @@
         <textarea id="bericht" rows="1" placeholder="Waar kan ik je mee helpen?" aria-label="Jouw bericht"></textarea>
         <button id="versturen" type="button">Versturen</button>
       </div>
-      <div class="werkwijze" role="radiogroup" aria-label="Hoe grondig moet Buddy te werk gaan?">
-        <button type="button" class="stand" data-modus="snel" role="radio" aria-checked="false">
-          Snel <span>meestal binnen een minuut</span>
-        </button>
-        <button type="button" class="stand" data-modus="grondig" role="radio" aria-checked="true">
-          Grondig <span>volledig onderzoek, enkele minuten</span>
-        </button>
+      <div class="werkwijze">
+        <div class="standen" role="radiogroup" aria-label="Hoe grondig moet Buddy te werk gaan?">
+          <button type="button" class="stand" data-modus="snel" role="radio" aria-checked="false">
+            Snel <span>meestal binnen een minuut</span>
+          </button>
+          <button type="button" class="stand" data-modus="grondig" role="radio" aria-checked="true">
+            Grondig <span>volledig onderzoek, enkele minuten</span>
+          </button>
+        </div>
         <button type="button" id="bijlageknop" class="knop-bijlage">
           &#128206; Bestand meesturen
         </button>
