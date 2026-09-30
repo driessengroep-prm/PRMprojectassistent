@@ -203,6 +203,10 @@
 
   /* ---------- draad ---------- */
   .draad{flex:none;width:100%;max-width:820px;margin:0 auto;padding:34px 24px 40px}
+  .meegestuurd{
+    margin-top:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,.25);
+    font-size:12.5px;opacity:.85;
+  }
   .vraag{
     background:var(--teal);color:var(--wit);border-radius:20px 20px 6px 20px;
     padding:13px 18px;margin:0 0 26px auto;max-width:76%;width:fit-content;
@@ -347,6 +351,29 @@
   @media (max-width:560px){
     .werkwijze .stand span{display:none}
   }
+
+  /* ---------- meegestuurde bestanden ---------- */
+  .knop-bijlage{
+    margin-left:auto;flex:none;cursor:pointer;
+    background:transparent;border:1.5px solid var(--lijn);border-radius:999px;
+    font-family:var(--ui);font-size:13px;font-weight:600;color:var(--grijs);padding:5px 14px;
+  }
+  .knop-bijlage:hover{border-color:var(--goud);color:var(--teal)}
+  .knop-bijlage:focus-visible{outline:2px solid var(--koraal-diep);outline-offset:2px}
+  .bijlagen{max-width:820px;margin:9px auto 0;display:flex;gap:7px;flex-wrap:wrap}
+  .bijlage{
+    display:flex;align-items:center;gap:8px;padding:4px 6px 4px 12px;
+    background:var(--creme);border:1px solid var(--lijn);border-radius:999px;font-size:12.5px;
+  }
+  .bijlage b{font-weight:600;color:var(--inkt)}
+  .bijlage .maat{color:var(--grijs)}
+  .bijlage .weg{
+    border:0;background:none;cursor:pointer;color:var(--grijs);
+    font-family:var(--ui);font-size:14px;line-height:1;padding:3px 6px;border-radius:50%;
+  }
+  .bijlage .weg:hover{background:var(--wit);color:var(--koraal-diep)}
+  .bijlage.stuk{border-color:var(--koraal);background:#FDEBE4}
+  .bijlage.stuk b{color:var(--koraal-diep)}
   .invoer textarea{
     flex:1;resize:none;font-family:var(--ui);font-size:15.5px;line-height:1.55;
     border:1.5px solid var(--lijn);border-radius:22px;padding:12px 18px;
@@ -551,7 +578,13 @@
         <button type="button" class="stand" data-modus="grondig" role="radio" aria-checked="true">
           Grondig <span>volledig onderzoek, enkele minuten</span>
         </button>
+        <button type="button" id="bijlageknop" class="knop-bijlage">
+          &#128206; Bestand meesturen
+        </button>
+        <input type="file" id="bestand" multiple hidden
+               accept=".txt,.md,.markdown,.csv,.docx,text/plain,text/markdown,text/csv,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
       </div>
+      <div class="bijlagen" id="bijlagen" hidden></div>
     </footer>
   </div>
 </div>
@@ -1045,9 +1078,14 @@
     return el;
   }
 
-  function toonVraag(tekst) {
+  function toonVraag(tekst, meegestuurd) {
     var el = element("div", "vraag");
     el.textContent = tekst;
+    if (meegestuurd && meegestuurd.length) {
+      var regel = element("div", "meegestuurd");
+      regel.textContent = "\uD83D\uDCCE " + meegestuurd.join(", ");
+      el.appendChild(regel);
+    }
     draad.appendChild(el);
     naarBeneden();
   }
@@ -1076,6 +1114,179 @@
   var standen = [].slice.call(document.querySelectorAll(".werkwijze .stand"));
   standen.forEach(function (knop) {
     knop.addEventListener("click", function () { zetModus(knop.getAttribute("data-modus")); });
+  });
+
+  /* ------------------------------------------------------------------ *
+   *  BESTANDEN MEESTUREN                                                 *
+   *                                                                     *
+   *  De pagina leest het bestand zelf en stuurt alleen de tekst mee. Er  *
+   *  wordt niets opgeslagen: het hoort bij deze ene vraag. Zo is er ook  *
+   *  geen vraag wie er later bij die tekst mag.                          *
+   *                                                                     *
+   *  Word gaat zonder externe bibliotheek. Een .docx is een zip, en de   *
+   *  browser kan tegenwoordig zelf uitpakken met DecompressionStream.    *
+   *  Dat scheelt een megabyte aan meegeladen code.                       *
+   * ------------------------------------------------------------------ */
+  var BIJLAGE_MAX_BYTES = 10 * 1024 * 1024;   // waar de browser nog vlot doorheen komt
+  var BIJLAGE_MAX_TEKENS = 40000;             // ~15 pagina's; daarboven kost het te veel
+  var BIJLAGEN_MAX = 5;
+
+  var bijlagen = [];                          // { naam, tekst, tekens, fout }
+
+  function leesAlsTekst(bestand) {
+    return bestand.text().then(function (t) {
+      // Sommige exports beginnen met een byte order mark; die hoort niet in de tekst.
+      return t.replace(/^﻿/, "");
+    });
+  }
+
+  // --- zip uitpakken -------------------------------------------------------
+  // Alleen wat nodig is om er een enkel bestand uit te halen. De centrale
+  // catalogus is leidend: de lokale kop mag nul als lengte bevatten wanneer
+  // de maten pas achter de gegevens staan.
+  function zipOnderdeel(buffer, gezocht) {
+    var dv = new DataView(buffer);
+    var bytes = new Uint8Array(buffer);
+
+    // Het slot van de catalogus staat achteraan, achter een staart van
+    // hooguit 64 kB commentaar. Daarom van achter naar voren zoeken.
+    var slot = -1;
+    var ondergrens = Math.max(0, bytes.length - 66000);
+    for (var i = bytes.length - 22; i >= ondergrens; i--) {
+      if (dv.getUint32(i, true) === 0x06054b50) { slot = i; break; }
+    }
+    if (slot < 0) { throw new Error("dit lijkt geen geldig Word-bestand"); }
+
+    var aantal = dv.getUint16(slot + 10, true);
+    var wijzer = dv.getUint32(slot + 16, true);
+
+    for (var n = 0; n < aantal; n++) {
+      if (dv.getUint32(wijzer, true) !== 0x02014b50) { break; }
+      var methode = dv.getUint16(wijzer + 10, true);
+      var ingepakt = dv.getUint32(wijzer + 20, true);
+      var naamLengte = dv.getUint16(wijzer + 28, true);
+      var extraLengte = dv.getUint16(wijzer + 30, true);
+      var commentLengte = dv.getUint16(wijzer + 32, true);
+      var begin = dv.getUint32(wijzer + 42, true);
+      var naam = new TextDecoder().decode(bytes.subarray(wijzer + 46, wijzer + 46 + naamLengte));
+
+      if (naam === gezocht) {
+        // De lokale kop heeft eigen lengtes voor naam en extra veld.
+        var lokaalNaam = dv.getUint16(begin + 26, true);
+        var lokaalExtra = dv.getUint16(begin + 28, true);
+        var start = begin + 30 + lokaalNaam + lokaalExtra;
+        var brok = bytes.subarray(start, start + ingepakt);
+        if (methode === 0) { return Promise.resolve(brok); }
+        if (methode !== 8) { throw new Error("onbekende inpakmethode in het bestand"); }
+        var stroom = new Blob([brok]).stream()
+          .pipeThrough(new DecompressionStream("deflate-raw"));
+        return new Response(stroom).arrayBuffer().then(function (uit) {
+          return new Uint8Array(uit);
+        });
+      }
+      wijzer += 46 + naamLengte + extraLengte + commentLengte;
+    }
+    throw new Error("geen leesbare tekst in dit Word-bestand");
+  }
+
+  function uitWordXml(xml) {
+    return xml
+      .replace(/<w:tab\b[^>]*\/?>/g, "\t")
+      .replace(/<w:br\b[^>]*\/?>/g, "\n")
+      .replace(/<\/w:p>/g, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+      .replace(/&amp;/g, "&")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  function leesWord(bestand) {
+    if (typeof DecompressionStream === "undefined") {
+      return Promise.reject(new Error("deze browser kan geen Word-bestanden uitpakken"));
+    }
+    return bestand.arrayBuffer()
+      .then(function (buf) { return zipOnderdeel(buf, "word/document.xml"); })
+      .then(function (bytes) { return uitWordXml(new TextDecoder().decode(bytes)); });
+  }
+
+  function leesBestand(bestand) {
+    var naam = bestand.name || "bestand";
+    var laag = naam.toLowerCase();
+
+    if (bestand.size > BIJLAGE_MAX_BYTES) {
+      return Promise.resolve({ naam: naam, fout: "groter dan 10 MB" });
+    }
+    if (/\.pdf$/.test(laag)) {
+      return Promise.resolve({ naam: naam, fout: "pdf kan nog niet — sla op als Word of plak de tekst" });
+    }
+
+    var lezer = /\.docx$/.test(laag) ? leesWord(bestand)
+              : /\.(txt|md|markdown|csv)$/.test(laag) ? leesAlsTekst(bestand)
+              : null;
+    if (!lezer) {
+      return Promise.resolve({ naam: naam, fout: "dit bestandstype kan nog niet" });
+    }
+
+    return lezer.then(function (tekst) {
+      tekst = String(tekst || "").trim();
+      if (!tekst) { return { naam: naam, fout: "geen tekst gevonden in dit bestand" }; }
+      var volledig = tekst.length;
+      if (volledig > BIJLAGE_MAX_TEKENS) {
+        tekst = tekst.slice(0, BIJLAGE_MAX_TEKENS) +
+                "\n\n[afgekapt: het bestand bevat " + volledig + " tekens]";
+      }
+      return { naam: naam, tekst: tekst, tekens: volledig };
+    }, function (fout) {
+      return { naam: naam, fout: fout.message || "kon dit bestand niet lezen" };
+    });
+  }
+
+  // Afronden op duizendtallen maakt van een kort bestand "0k tekens".
+  function maatInTekens(n) {
+    return n < 1000 ? n + " tekens" : Math.round(n / 1000) + "k tekens";
+  }
+
+  function tekenBijlagen() {
+    var bak = document.getElementById("bijlagen");
+    bak.innerHTML = "";
+    bak.hidden = bijlagen.length === 0;
+    bijlagen.forEach(function (b, i) {
+      var chip = element("div", "bijlage" + (b.fout ? " stuk" : ""));
+      chip.innerHTML = "<b>" + ontsnap(b.naam) + "</b>" +
+        '<span class="maat">' +
+        ontsnap(b.fout ? b.fout : maatInTekens(b.tekens || 0)) +
+        "</span>";
+      var weg = element("button", "weg", "&#10005;");
+      weg.type = "button";
+      weg.setAttribute("aria-label", "Verwijder " + b.naam);
+      weg.addEventListener("click", function () {
+        bijlagen.splice(i, 1);
+        tekenBijlagen();
+      });
+      chip.appendChild(weg);
+      bak.appendChild(chip);
+    });
+  }
+
+  function voegBijlagenToe(lijst) {
+    var ruimte = BIJLAGEN_MAX - bijlagen.length;
+    var gekozen = [].slice.call(lijst).slice(0, Math.max(0, ruimte));
+    if (!gekozen.length) { return; }
+    Promise.all(gekozen.map(leesBestand)).then(function (uit) {
+      bijlagen = bijlagen.concat(uit);
+      tekenBijlagen();
+    });
+  }
+
+  var bestandVeld = document.getElementById("bestand");
+  document.getElementById("bijlageknop").addEventListener("click", function () {
+    bestandVeld.click();
+  });
+  bestandVeld.addEventListener("change", function () {
+    voegBijlagenToe(bestandVeld.files);
+    bestandVeld.value = "";     // zodat hetzelfde bestand opnieuw gekozen kan worden
   });
 
   var wachtKlok = null;
@@ -1407,7 +1618,7 @@
     draad.innerHTML = "";
     document.body.setAttribute("data-gestart", "ja");
     (g.beurten || []).forEach(function (beurt) {
-      toonVraag(beurt.vraag);
+      toonVraag(beurt.vraag, beurt.bijlagen);
       toonAntwoord(beurt.forum, beurt.advies);
     });
     zetLade(false);
@@ -1749,12 +1960,22 @@
       };
     }
 
+    // Alleen wat gelukt is gaat mee; een bestand dat niet gelezen kon worden
+    // is een melding op het scherm, geen lege bijlage in de vraag.
+    var meegestuurd = bijlagen
+      .filter(function (b) { return b.tekst; })
+      .map(function (b) { return { naam: b.naam, tekst: b.tekst }; });
+    var bijlageNamen = meegestuurd.map(function (b) { return b.naam; });
+
     invoer.value = "";
     invoer.style.height = "auto";
     knop.disabled = true;
     document.body.setAttribute("data-gestart", "ja");
     zetInstellingen(false);
-    toonVraag(tekst);
+    toonVraag(tekst, bijlageNamen);
+    // De bijlagen horen bij deze ene vraag; daarna is het veld weer leeg.
+    bijlagen = [];
+    tekenBijlagen();
     toonWachten();
 
     // Hoe lang het verzoek openstond, om een afgekapte verbinding te kunnen
@@ -1783,7 +2004,8 @@
         sessionId: gesprek.id,
         chatInput: tekst,
         beurtId: beurtId,
-        modus: modus
+        modus: modus,
+        bijlagen: meegestuurd
       })
     });
 
@@ -1828,7 +2050,10 @@
     wachten
       .then(function (r) {
         toonAntwoord(r.forum, r.advies);
-        gesprek.beurten.push({ vraag: tekst, forum: r.forum || null, advies: r.advies });
+        gesprek.beurten.push({
+          vraag: tekst, forum: r.forum || null, advies: r.advies,
+          bijlagen: bijlageNamen.length ? bijlageNamen : undefined
+        });
         opslaan();
       })
       .catch(function (fout) {
