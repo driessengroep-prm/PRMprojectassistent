@@ -259,6 +259,27 @@
     padding:20px 24px;box-shadow:var(--schaduw);
   }
 
+  /* ---------- bronnen ---------- */
+  .bronnen{margin-top:20px;padding-top:16px;border-top:1px solid var(--lijn)}
+  .bronnen h4{
+    margin:0 0 10px;font-size:12px;font-weight:600;color:var(--grijs);
+    text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:7px;
+  }
+  .bronnen h4 span{
+    background:var(--creme);color:var(--koraal-diep);border-radius:999px;
+    padding:1px 7px;font-size:11px;letter-spacing:0;
+  }
+  .bronnen ol{margin:0;padding-left:1.35em;font-size:14px;line-height:1.5}
+  .bronnen li{margin-bottom:6px}
+  .bronnen li::marker{color:var(--goud);font-weight:600}
+  .bronnen .waar{display:block;font-size:12px;color:var(--grijs)}
+
+  /* ---------- links in de tekst ---------- */
+  .doc a,.bronnen a{color:var(--teal);text-decoration:underline;text-underline-offset:2px}
+  .doc a:hover,.bronnen a:hover{color:var(--koraal-diep)}
+  /* Een kaal adres kan langer zijn dan de kaart breed is. */
+  .doc a{overflow-wrap:anywhere}
+
   /* ---------- documenttekst ---------- */
   .doc{font-size:16px;line-height:1.68}
   .doc > :first-child{margin-top:0}
@@ -763,11 +784,127 @@
     return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  // Alleen http en https worden een link. Alles daarbuiten - javascript:,
+  // data:, file: - blijft platte tekst; een adres uit een taalmodel is
+  // niets waar je blind een klikbare link van maakt.
+  function veiligAdres(url) {
+    return /^https?:\/\//i.test(url) ? url : null;
+  }
+
+  // ontsnap() dekt &, < en > af, maar niet de aanhalingstekens. In lopende
+  // tekst maakt dat niets uit; in een href wel, want daar zou een quote uit
+  // het attribuut breken. Vandaar deze extra slag, alleen voor attributen.
+  function inAttribuut(waarde) {
+    return String(waarde).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function link(url, tekst) {
+    var veilig = veiligAdres(url);
+    if (!veilig) { return tekst; }
+    return '<a href="' + inAttribuut(veilig) + '" target="_blank" rel="noopener noreferrer">' +
+           tekst + "</a>";
+  }
+
+  // Leestekens die aan het eind van een zin tegen een adres aan plakken horen
+  // er niet bij: "zie https://example.org/rapport." eindigt op een punt.
+  var STAARTTEKENS = /[.,;:!?)\]]+$/;
+
   function inline(t) {
     return t
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+      .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+      // [titel](adres)
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi, function (heel, tekst, url) {
+        return link(url, tekst);
+      })
+      // een kaal adres, mits het niet net al in een href is beland
+      .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/gi, function (heel, voor, url) {
+        var staart = (url.match(STAARTTEKENS) || [""])[0];
+        var kaal = staart ? url.slice(0, -staart.length) : url;
+        return voor + link(kaal, kaal) + staart;
+      });
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  BRONNEN                                                            *
+   *                                                                     *
+   *  Digger krijgt zijn bronnen van de zoekdienst en noemt ze in zijn    *
+   *  rapport; Buddy neemt ze over in zijn advies. Ze staan dus al in het *
+   *  materiaal dat de pagina binnenkrijgt - alleen verspreid, en soms    *
+   *  dubbel. Hier halen we ze eruit en zetten we ze onder het advies,    *
+   *  zodat navolgbaar is waar een bewering vandaan komt.                 *
+   * ------------------------------------------------------------------ */
+  var MARKDOWN_LINK = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi;
+  var KAAL_ADRES = /(?:^|[\s(])(https?:\/\/[^\s<)\]]+)/gi;
+
+  // Twee adressen naar dezelfde pagina horen een bron te zijn. Een afsluitend
+  // leesteken, een slash op het eind en het verschil tussen http en https
+  // maken die pagina niet anders.
+  function zelfdeBron(url) {
+    return url.replace(STAARTTEKENS, "")
+              .replace(/^https?:\/\//i, "")
+              .replace(/\/+$/, "")
+              .toLowerCase();
+  }
+
+  function domein(url) {
+    var m = url.match(/^https?:\/\/([^\/?#]+)/i);
+    return m ? m[1].replace(/^www\./i, "") : url;
+  }
+
+  function bronnenUit(forum, advies) {
+    var teksten = [];
+    (Array.isArray(forum) ? forum : []).forEach(function (r) {
+      if (r && r.tekst) { teksten.push(String(r.tekst)); }
+    });
+    if (advies) { teksten.push(String(advies)); }
+
+    var gezien = {};
+    var uit = [];
+
+    function bewaar(url, titel) {
+      var schoon = url.replace(STAARTTEKENS, "");
+      if (!veiligAdres(schoon)) { return; }
+      var sleutel = zelfdeBron(schoon);
+      if (gezien[sleutel]) {
+        // Een titel uit een markdown-link is beter dan een kaal adres; komt
+        // die later alsnog langs, dan vullen we hem aan.
+        if (titel && !gezien[sleutel].titel) { gezien[sleutel].titel = titel; }
+        return;
+      }
+      var bron = { url: schoon, titel: titel || "", domein: domein(schoon) };
+      gezien[sleutel] = bron;
+      uit.push(bron);
+    }
+
+    teksten.forEach(function (tekst) {
+      var m;
+      MARKDOWN_LINK.lastIndex = 0;
+      while ((m = MARKDOWN_LINK.exec(tekst)) !== null) { bewaar(m[2], m[1].trim()); }
+      KAAL_ADRES.lastIndex = 0;
+      while ((m = KAAL_ADRES.exec(tekst)) !== null) { bewaar(m[1], ""); }
+    });
+
+    return uit;
+  }
+
+  function bronnenBlok(bronnen) {
+    if (!bronnen.length) { return null; }
+    var blok = element("section", "bronnen");
+    blok.appendChild(element("h4", null,
+      "Bronnen <span>" + bronnen.length + "</span>"));
+    var lijst = document.createElement("ol");
+    bronnen.forEach(function (bron) {
+      var li = document.createElement("li");
+      li.innerHTML =
+        '<a href="' + inAttribuut(bron.url) + '" target="_blank" rel="noopener noreferrer">' +
+        ontsnap(bron.titel || bron.domein) + "</a>" +
+        (bron.titel ? '<span class="waar">' + ontsnap(bron.domein) + "</span>" : "");
+      lijst.appendChild(li);
+    });
+    blok.appendChild(lijst);
+    return blok;
   }
 
   function naarHtml(ruw) {
@@ -1154,6 +1291,8 @@
 
     var kaart = element("div", "kaart");
     kaart.appendChild(element("div", "doc", naarHtml(adviestekst)));
+    var bronnen = bronnenBlok(bronnenUit(forum, adviestekst));
+    if (bronnen) { kaart.appendChild(bronnen); }
     blok.appendChild(kaart);
 
     draad.appendChild(blok);
@@ -1357,9 +1496,20 @@
       }
 
       uit.push("### Advies van " + BUDDY.naam, "", beurt.advies, "");
+
+      var bronnen = bronnenUit(beurt.forum, beurt.advies);
+      if (bronnen.length) {
+        uit.push("### Bronnen", "");
+        bronnen.forEach(function (bron) {
+          uit.push("- [" + (bron.titel || bron.domein) + "](" + bron.url + ")");
+        });
+        uit.push("");
+      }
     });
 
-    var naam = g.titel.replace(/[^\wÀ-ſ -]/g, "").trim().slice(0, 60) || "gesprek";
+    // gesprekNaam() en niet g.titel: bij een gesprek zonder eigen naam leidt
+    // die tot een lege bestandsnaam of een fout.
+    var naam = gesprekNaam(g).replace(/[^\wÀ-ſ -]/g, "").trim().slice(0, 60) || "gesprek";
     var blob = new Blob([uit.join("\n")], { type: "text/markdown;charset=utf-8" });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
