@@ -493,6 +493,17 @@
       var account = (terug && terug.account) || app.getAllAccounts()[0];
       if (!account) { return app.loginRedirect({ scopes: scopes }); }
       app.setActiveAccount(account);
+
+      // Wie er is ingelogd, zodat n8n het gesprek aan een persoon kan hangen.
+      // De oid is het enige kenmerk dat niet verandert: een naam of e-mailadres
+      // kan wijzigen, de oid niet. Daarop koppelt de database.
+      window.PRM_GEBRUIKER = {
+        oid: (account.idTokenClaims && account.idTokenClaims.oid) ||
+             account.localAccountId || account.homeAccountId || "",
+        naam: account.name || "",
+        email: account.username || ""
+      };
+
       html.classList.remove("inloggen");
     })
     .catch(mislukt);
@@ -1540,6 +1551,20 @@
     return kernwoorden(eerste) || g.titel || "Nieuw gesprek";
   }
 
+  // Wie de vraag stelt, voor de opslag in Buddy Data. Lokaal (file:// of
+  // localhost) wordt het inloggen overgeslagen; dan is er niemand en laten we
+  // het veld weg in plaats van het leeg mee te sturen.
+  //
+  // Alleen de identiteit gaat mee, geen token. Een token zou in de
+  // uitvoeringslogboeken van n8n belanden, en daar hoort het niet. Zodra de
+  // terugleesroute er is wordt er wel een token meegestuurd - dan is er ook
+  // iets dat het controleert.
+  function wieIsIngelogd() {
+    var wie = window.PRM_GEBRUIKER;
+    if (!wie || !wie.oid) { return undefined; }
+    return { oid: wie.oid, naam: wie.naam || "", email: wie.email || "" };
+  }
+
   function knip(tekst, lengte) {
     var t = kaal(tekst);
     return t.length > lengte ? t.slice(0, lengte) + "…" : t;
@@ -2486,7 +2511,8 @@
         chatInput: tekst,
         beurtId: beurtId,
         modus: modus,
-        bijlagen: meegestuurd
+        bijlagen: meegestuurd,
+        gebruiker: wieIsIngelogd()
       })
     });
 
