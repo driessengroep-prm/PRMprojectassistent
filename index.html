@@ -343,6 +343,47 @@
   }
   .storing b{display:block;margin-bottom:3px;color:var(--koraal-diep);font-weight:600}
 
+  /* ---------- venster ---------- */
+  /* Een eigen venster in plaats van confirm() en prompt() van de browser.
+     Die zien er per browser anders uit, staan bovenaan het scherm geplakt
+     en noemen het adres van de site - alsof de vraag ergens anders vandaan
+     komt. <dialog> doet het werk dat ze wel goed deden: toetsenbord erin
+     houden, Escape sluiten, en de focus terugzetten waar hij vandaan kwam. */
+  .venster{
+    border:0;padding:0;background:transparent;max-width:420px;width:calc(100% - 32px);
+    color:var(--inkt);
+  }
+  .venster::backdrop{background:rgba(38,48,47,.38)}
+  .venster .kaart{
+    background:var(--wit);border:1.5px solid var(--lijn);border-radius:20px;
+    padding:24px 26px 20px;box-shadow:0 14px 40px rgba(38,48,47,.18);
+    font-family:var(--ui);
+  }
+  .venster h2{margin:0 0 8px;font-size:17px;font-weight:600;color:var(--teal);line-height:1.35}
+  .venster p{margin:0;font-size:14.5px;line-height:1.55;color:var(--grijs)}
+  .venster input{
+    width:100%;margin-top:16px;padding:10px 13px;font-family:var(--ui);font-size:15px;
+    border:1.5px solid var(--lijn);border-radius:10px;background:var(--wit);color:var(--inkt);
+  }
+  .venster input:focus{outline:2px solid var(--goud);outline-offset:-1px;border-color:transparent}
+  .venster .knoppen{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}
+  .venster button{
+    font-family:var(--ui);font-size:14px;font-weight:600;
+    padding:9px 20px;border-radius:999px;cursor:pointer;
+  }
+  .venster .nee{background:transparent;color:var(--grijs);border:1.5px solid var(--lijn)}
+  .venster .nee:hover{border-color:var(--teal);color:var(--teal);background:var(--creme)}
+  .venster .ja{background:var(--koraal);color:var(--wit);border:1.5px solid var(--koraal)}
+  .venster .ja:hover{background:var(--koraal-diep);border-color:var(--koraal-diep)}
+  .venster button:focus-visible{outline:2px solid var(--koraal-diep);outline-offset:2px}
+  .venster[open]{animation:venster-op .16s ease-out}
+  .venster[open]::backdrop{animation:sluier-op .16s ease-out}
+  @keyframes venster-op{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes sluier-op{from{opacity:0}to{opacity:1}}
+  @media (prefers-reduced-motion:reduce){
+    .venster[open],.venster[open]::backdrop{animation:none}
+  }
+
   /* ---------- invoer ---------- */
   footer{background:var(--wit);padding:14px 24px 16px;flex:none}
   .invoer{max-width:820px;margin:0 auto;display:flex;gap:11px;align-items:flex-end}
@@ -659,6 +700,18 @@
     </footer>
   </div>
 </div>
+
+<dialog class="venster" id="venster" aria-labelledby="venster-kop">
+  <form method="dialog" class="kaart">
+    <h2 id="venster-kop"></h2>
+    <p id="venster-tekst"></p>
+    <input id="venster-invoer" type="text" hidden>
+    <div class="knoppen">
+      <button type="submit" value="nee" class="nee" id="venster-nee">Annuleren</button>
+      <button type="submit" value="ja" class="ja" id="venster-ja">Ja</button>
+    </div>
+  </form>
+</dialog>
 
 <script>
 (function () {
@@ -1203,6 +1256,65 @@
     if (klasse) { el.className = klasse; }
     if (html !== undefined) { el.innerHTML = html; }
     return el;
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  VRAGEN IN DE STIJL VAN DE TOOL                                      *
+   *                                                                     *
+   *  confirm() en prompt() van de browser zien er per browser anders     *
+   *  uit, plakken bovenaan het scherm en zetten het adres van de site    *
+   *  erboven - alsof de vraag ergens anders vandaan komt dan uit deze    *
+   *  pagina.                                                             *
+   *                                                                     *
+   *  <dialog> doet wel wat ze goed deden: de focus blijft binnen het     *
+   *  venster, Escape sluit het, en daarna springt de focus terug naar    *
+   *  de knop waar je vandaan kwam.                                       *
+   *                                                                     *
+   *  Antwoord: null als er is afgezien, anders true of de ingetypte      *
+   *  tekst. Dat is dezelfde afspraak als bij prompt(), zodat de          *
+   *  aanroepen eenvoudig blijven.                                        *
+   * ------------------------------------------------------------------ */
+  var venster = document.getElementById("venster");
+  var vensterKop = document.getElementById("venster-kop");
+  var vensterTekst = document.getElementById("venster-tekst");
+  var vensterInvoer = document.getElementById("venster-invoer");
+  var vensterJa = document.getElementById("venster-ja");
+
+  // Enter in het tekstveld hoort te bevestigen. Zonder dit kiest de browser
+  // de eerste knop in het formulier, en dat is Annuleren.
+  vensterInvoer.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); vensterJa.click(); }
+  });
+
+  function vraagVenster(opties) {
+    var metInvoer = typeof opties.waarde === "string";
+
+    // Een browser zonder <dialog> krijgt alsnog de vraag voorgelegd. Lelijk
+    // is beter dan iets ongemerkt verwijderen.
+    if (typeof venster.showModal !== "function") {
+      if (metInvoer) { return Promise.resolve(window.prompt(opties.kop, opties.waarde)); }
+      return Promise.resolve(window.confirm(opties.kop) ? true : null);
+    }
+
+    vensterKop.textContent = opties.kop;
+    vensterTekst.textContent = opties.tekst || "";
+    vensterTekst.hidden = !opties.tekst;
+    vensterJa.textContent = opties.ja || "Ja";
+    vensterInvoer.hidden = !metInvoer;
+    vensterInvoer.value = metInvoer ? opties.waarde : "";
+
+    venster.returnValue = "";   // blijft anders staan van de vorige keer
+    venster.showModal();
+    if (metInvoer) { vensterInvoer.focus(); vensterInvoer.select(); }
+    else { vensterJa.focus(); }
+
+    return new Promise(function (klaar) {
+      venster.addEventListener("close", function eenmaal() {
+        venster.removeEventListener("close", eenmaal);
+        if (venster.returnValue !== "ja") { klaar(null); return; }
+        klaar(metInvoer ? vensterInvoer.value : true);
+      });
+    });
   }
 
   function toonVraag(tekst, meegestuurd) {
@@ -1979,20 +2091,26 @@
       hernoem.title = "Hernoemen";
       hernoem.setAttribute("aria-label", "Gesprek hernoemen: " + naam);
       hernoem.addEventListener("click", function () {
-        var gekozen = window.prompt("Nieuwe naam voor dit gesprek:", naam);
-        if (gekozen === null) { return; }
-        gekozen = gekozen.trim();
-        if (!gekozen) { return; }
-        var opgeslagen = Opslag.lees(g.id);
-        if (!opgeslagen) { return; }
-        opgeslagen.titel = gekozen.slice(0, 80);
-        opgeslagen.zelfBenoemd = true;   // hierna niet meer zelf afleiden
-        try { Opslag.schrijf(opgeslagen); } catch (e) { /* naam niet kwijt kunnen: laat staan */ }
-        if (gesprek && gesprek.id === g.id) {
-          gesprek.titel = opgeslagen.titel;
-          gesprek.zelfBenoemd = true;
-        }
-        tekenLijst();
+        vraagVenster({
+          kop: "Gesprek hernoemen",
+          tekst: "De naam staat alleen in je eigen overzicht.",
+          waarde: naam,
+          ja: "Opslaan"
+        }).then(function (gekozen) {
+          if (gekozen === null) { return; }
+          gekozen = gekozen.trim();
+          if (!gekozen) { return; }
+          var opgeslagen = Opslag.lees(g.id);
+          if (!opgeslagen) { return; }
+          opgeslagen.titel = gekozen.slice(0, 80);
+          opgeslagen.zelfBenoemd = true;   // hierna niet meer zelf afleiden
+          try { Opslag.schrijf(opgeslagen); } catch (e) { /* naam niet kwijt kunnen: laat staan */ }
+          if (gesprek && gesprek.id === g.id) {
+            gesprek.titel = opgeslagen.titel;
+            gesprek.zelfBenoemd = true;
+          }
+          tekenLijst();
+        });
       });
       rij.appendChild(hernoem);
 
@@ -2008,19 +2126,33 @@
       wis.title = "Verwijderen";
       wis.setAttribute("aria-label", "Gesprek verwijderen: " + naam);
       wis.addEventListener("click", function () {
-        if (!window.confirm("\"" + naam + "\" definitief verwijderen?")) { return; }
-        wis.disabled = true;
-        verwijderGesprek(g.id).then(function () {
-          Opslag.verwijder(g.id);
-          if (gesprek && gesprek.id === g.id) { nieuwGesprek(); } else { tekenLijst(); }
-        }, function (fout) {
-          wis.disabled = false;
-          toonStoring("Dit gesprek is niet verwijderd",
-            "Het centrale archief gaf geen bevestiging: " + fout.message + ". Het gesprek " +
-            "staat daarom nog in je overzicht. Zou de pagina het hier wel weghalen, dan leek " +
-            "het verwijderd terwijl het centraal bewaard blijft - en dat is misleidender dan " +
-            "deze melding. Probeer het opnieuw, of controleer de verwijder-URL onder " +
-            "Instellingen.");
+        // Wat er precies gebeurt hangt ervan af of er een verwijder-URL staat.
+        // Beloven dat het ook centraal weggaat terwijl dat niet zo is, is
+        // precies het soort schijn dat deze knop moest oplossen.
+        var centraal = !!verwijderVeld.value.trim();
+
+        vraagVenster({
+          kop: "\u201C" + naam + "\u201D verwijderen?",
+          tekst: centraal
+            ? "Het gesprek verdwijnt uit je overzicht en wordt ook uit het centrale " +
+              "archief gewist. Dit kun je niet terugdraaien."
+            : "Het gesprek verdwijnt uit dit overzicht. Dit kun je niet terugdraaien.",
+          ja: "Verwijderen"
+        }).then(function (ja) {
+          if (!ja) { return; }
+          wis.disabled = true;
+          return verwijderGesprek(g.id).then(function () {
+            Opslag.verwijder(g.id);
+            if (gesprek && gesprek.id === g.id) { nieuwGesprek(); } else { tekenLijst(); }
+          }, function (fout) {
+            wis.disabled = false;
+            toonStoring("Dit gesprek is niet verwijderd",
+              "Het centrale archief gaf geen bevestiging: " + fout.message + ". Het gesprek " +
+              "staat daarom nog in je overzicht. Zou de pagina het hier wel weghalen, dan leek " +
+              "het verwijderd terwijl het centraal bewaard blijft - en dat is misleidender dan " +
+              "deze melding. Probeer het opnieuw, of controleer de verwijder-URL onder " +
+              "Instellingen.");
+          });
         });
       });
       rij.appendChild(wis);
