@@ -1,0 +1,148 @@
+{
+  "name": "PRM 5 - Gesprekken ophalen",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Gesprekken teruglezen\n\nDe zijbalk vraagt dit op zodra je bent ingelogd.\n\n**Twee vragen, een route**\nZonder sessieId: geef de lijst van mijn gesprekken.\nMet sessieId: geef de beurten van dat ene gesprek.\nDe pagina haalt de inhoud pas op als je een gesprek opent, zodat niet bij\nelke keer laden alles over de lijn gaat.\n\n**Waarom 'Wie ben jij' er tussen zit**\nDe oid komt uit het antwoord van Microsoft en nooit uit het verzoek. Zou de\npagina mogen zeggen wie ze is, dan kon iemand het verzoek nabootsen met het\nkenmerk van een collega en zo diens gesprekken opvragen. Nu bepaalt de\nserver het, en levert een nagebootst verzoek alleen je eigen gesprekken op.\n\n**Na import drie dingen doen**\n1. Kies bij *Ophalen* de credential *Buddy Data - prm_projectassistent*.\n2. Zet bij *Verzoek binnen* onder Allowed Origins (CORS) het adres van de pagina.\n3. Activeer de workflow en plak de production-URL in de pagina, onder\n   Instellingen bij Gesprekken-URL.",
+        "height": 500,
+        "width": 460
+      },
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Toelichting",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-180, -60]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gesprekken-ophalen",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://prm-projectassistent.driessengroep.nl"
+        }
+      },
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Verzoek binnen",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [340, 120],
+      "webhookId": "b7f1c2a4-5d6e-4f80-9a1b-2c3d4e5f6071"
+    },
+    {
+      "parameters": {
+        "url": "https://graph.microsoft.com/v1.0/me?$select=id",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.headers.authorization }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "Wie ben jij",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [560, 120],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// De oid komt uit het antwoord van Microsoft, niet uit het verzoek: wat een\n// browser over zichzelf beweert mag een server niet geloven.\n//\n// Zonder sessieId vraagt de pagina haar lijst op, met sessieId de inhoud van\n// een gesprek. Beide filteren op die oid, dus het raden van andermans\n// sessie-id levert nul rijen op.\nconst wie = $input.first().json;\nconst verzoek = $('Verzoek binnen').first().json;\nconst sessieId = verzoek.body?.sessieId ?? verzoek.sessieId ?? '';\n\nif (!wie.id) { throw new Error('geen identiteit uit het token'); }\n\nconst oid = encodeURIComponent(wie.id);\nconst basis = 'https://buddy.driessengroep.nl/data/';\n\nif (!sessieId) {\n  return [{ json: { soort: 'lijst', url: basis + 'gesprekken'\n    + '?entra_oid=eq.' + oid\n    + '&select=sessie_id,titel,bijgewerkt'\n    + '&order=bijgewerkt.desc&limit=200' } }];\n}\n\nreturn [{ json: { soort: 'gesprek', url: basis + 'beurten'\n  + '?sessie_id=eq.' + encodeURIComponent(sessieId)\n  + '&entra_oid=eq.' + oid\n  + '&select=beurt_id,vraag,modus,advies,forum,klaar_op'\n  + '&order=klaar_op.asc' } }];"
+      },
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "Wat wordt gevraagd",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 20]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept-Profile",
+              "value": "app_prm_projectassistent"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a1000000-0000-4000-8000-000000000005",
+      "name": "Ophalen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 20],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Hoe n8n een lijst teruggeeft verschilt per versie: soms een item per rij,\n// soms een item met de hele lijst erin. Daarom vangen we beide vormen op.\n// Staat er niets, dan levert Always Output Data een leeg item - dat hoort\n// een lege lijst te worden en geen rij vol undefined.\nconst items = $input.all().map((i) => i.json);\nconst eerste = items[0];\nconst rijen = Array.isArray(eerste)\n  ? eerste\n  : items.filter((r) => r && Object.keys(r).length);\n\nconst soort = $('Wat wordt gevraagd').first().json.soort;\n\nif (soort === 'lijst') {\n  return [{ json: { gesprekken: rijen.map((r) => ({\n    sessieId: r.sessie_id,\n    titel: r.titel ?? '',\n    bijgewerkt: r.bijgewerkt ?? null,\n  })) } }];\n}\n\nreturn [{ json: { beurten: rijen.map((r) => ({\n  vraag: r.vraag ?? '',\n  advies: r.advies ?? '',\n  forum: r.forum ?? [],\n  modus: r.modus ?? '',\n  klaarOp: r.klaar_op ?? null,\n})) } }];"
+      },
+      "id": "a1000000-0000-4000-8000-000000000006",
+      "name": "Antwoord samenstellen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1220, 20]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000007",
+      "name": "Antwoorden",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1440, 20]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 401,
+        "responseBody": "{\n  \"status\": \"geweigerd\"\n}",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000008",
+      "name": "Weigeren",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [780, 240]
+    }
+  ],
+  "connections": {
+    "Verzoek binnen": {
+      "main": [[{ "node": "Wie ben jij", "type": "main", "index": 0 }]]
+    },
+    "Wie ben jij": {
+      "main": [
+        [{ "node": "Wat wordt gevraagd", "type": "main", "index": 0 }],
+        [{ "node": "Weigeren", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wat wordt gevraagd": {
+      "main": [[{ "node": "Ophalen", "type": "main", "index": 0 }]]
+    },
+    "Ophalen": {
+      "main": [[{ "node": "Antwoord samenstellen", "type": "main", "index": 0 }]]
+    },
+    "Antwoord samenstellen": {
+      "main": [[{ "node": "Antwoorden", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

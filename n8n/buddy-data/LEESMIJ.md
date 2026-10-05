@@ -213,17 +213,44 @@ half verwijderen is erger dan niet verwijderen.
 Eerst de beurten wissen, dan het gesprek. Andersom zou bij een fout halverwege
 het gesprek verdwijnen terwijl de inhoud blijft staan.
 
-## Wat hierna nog komt
+## Je eigen gesprekken teruglezen
 
-**De zijbalk leest nog uit de browser.** De gesprekken staan straks in Buddy Data,
-maar de pagina haalt ze nog uit localStorage. Een terugleesroute is een volgende
-stap, en die vraagt iets extra's: de pagina moet haar Entra-token meesturen en
-n8n moet dat controleren. Zonder die controle zou iemand die het verzoek nabootst
-de gesprekken van een collega kunnen opvragen — wat de browser beweert over wie
-hij is, mag je niet geloven.
+De zijbalk las alleen uit de browser. Wie op een andere computer inlogde, zag een
+lege lijst terwijl de gesprekken er wel waren. `gesprekken-ophalen.json` is de
+tweede workflow die je importeert.
 
-Daarom gaat er nu bewust **géén token** mee: er is nog niets dat het controleert,
-en het zou in de uitvoeringslogboeken van n8n belanden.
+**Twee vragen over één route.** Zonder `sessieId` geeft de workflow de lijst van
+je gesprekken: sessie-id, titel, datum. Met een `sessieId` geeft hij de beurten
+van dat ene gesprek. De pagina haalt de lijst op zodra je bent ingelogd, en de
+inhoud pas als je een gesprek opent — anders ging bij elke keer laden alles over
+de lijn, voor gesprekken die je meestal toch niet meer opent.
+
+**Dezelfde identiteitscontrole als bij het verwijderen.** De `oid` komt uit het
+antwoord van Microsoft, nooit uit het verzoek. Beide zoekopdrachten filteren erop.
+Een nagebootst verzoek levert dus je eigen gesprekken op en niet die van een
+ander — wat precies de afspraak was.
+
+Na import:
+
+1. Kies bij *Ophalen* de credential *Buddy Data — prm_projectassistent*.
+2. Zet bij *Verzoek binnen* onder **Allowed Origins (CORS)** het adres van de
+   pagina.
+3. Activeer de workflow en plak de production-URL in de pagina, onder
+   Instellingen bij **Gesprekken-URL**.
+
+Zet **Always Output Data** aan op *Ophalen*, om dezelfde reden als bij PRM 3: een
+lege lijst wordt anders nul items en dan komt de Respond-node niet aan de beurt.
+In het meegeleverde bestand staat die vlag al goed.
+
+De index op `gesprekken.entra_oid` uit stap 1 is hier voor bedoeld.
+
+**Wat de pagina doet met wat terugkomt.** Een gesprek dat ze nog niet kent, komt
+als naam en datum in de zijbalk. Open je het, dan haalt ze de inhoud op en staat
+het daarna gewoon in deze browser. Een gesprek dat ze wél al kent, laat ze met
+rust: wat lokaal staat is leidend, zodat een halve synchronisatie nooit een
+compleet gesprek kan overschrijven. Lukt het ophalen niet, dan zegt de zijbalk dat
+eronder — met de reden erbij, want "ik heb er geen" en "ik kon er niet bij" zijn
+twee verschillende dingen.
 
 **Bewaartermijn.** Bewust nog niet ingeregeld. Voor Postgres is de omvang geen
 probleem — een paar honderd gesprekken per jaar merkt niemand. Het punt is een
@@ -239,8 +266,13 @@ de meest vergeten. Kijk na welke bewaartermijn daar staat ingesteld.
 
 ## Wat getest is, en wat niet
 
-Getest: dat de pagina de ingelogde gebruiker meestuurt, en dat ze dat veld weglaat
-als er niemand is ingelogd (lokaal wordt de login overgeslagen).
+Getest in een echte browser, tegen een nagebootste n8n: dat de pagina de
+ingelogde gebruiker meestuurt en dat veld weglaat als er niemand is ingelogd; dat
+het token als `Bearer` meegaat bij verwijderen en teruglezen en de pagina nooit
+zelf zegt wie ze is; dat een gesprek bij een weigering blijft staan mét uitleg;
+dat een gesprek uit het archief in de zijbalk komt, bij openen wordt opgehaald en
+daarna niet nog eens; en dat een bestaand gesprek daarbij niet wordt
+overschreven.
 
 **Niet getest: alles wat Buddy Data raakt.** `buddy.driessengroep.nl` is een
 intern adres en vanaf de bouwomgeving niet bereikbaar. De opzet gaat ervan uit dat
