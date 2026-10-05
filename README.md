@@ -79,15 +79,26 @@ workflows bij Microsoft navragen wie je bent voordat ze iets doen — zie
 [Toegang beperken](#toegang-beperken). Zonder die controle is een adres in de
 pagina een open uitnodiging om je executions en tokens op te maken.
 
-Je kunt ze altijd overschrijven onder **Instellingen**, rechtsboven op de pagina.
-Wat je daar invult wordt in je browser onthouden en wint van wat is meegebakken.
-Let op: het wissen van cookies en site-gegevens wist dat ook weer, en dan vallen
-de velden terug op de meegebakken adressen.
+**Er is geen instellingenpaneel meer.** Dat bestond om deze adressen te plakken,
+en dat hoeft niet meer. De velden voor gebruiker en wachtwoord zijn er ook uit:
+*Basic Auth* is vervangen door de controle bij Microsoft, die weet wié je bent in
+plaats van alleen dat je een wachtwoord kent.
 
-Meegeven in de adresbalk kan ook:
-`prm-projectassistent.driessengroep.nl/?webhook=https://...` wint van allebei.
-Handig als bladwijzer of om even een tweede workflow te testen. Dat werkt ook
-met `?resultaat=`, `?verwijder=` en `?lijst=`.
+Overschrijven kan nog wel, via de adresbalk:
+
+```
+prm-projectassistent.driessengroep.nl/?webhook=https://...
+```
+
+Dat werkt ook met `?resultaat=`, `?verwijder=` en `?lijst=`, en wint van wat is
+meegebakken. Handig om even een tweede workflow te proberen, en het luik voor als
+er een secret verkeerd staat — daarmee is de tool aan de praat zonder opnieuw te
+publiceren.
+
+De volgorde is: adresbalk, dan wat is meegebakken, en pas daarna wat er nog in de
+browser staat van vroeger. Die laatste staat met opzet onderaan: je kunt hem
+nergens meer zien of wissen, dus een oud adres daar zou het juiste stilletjes
+overstemmen en dan werkt de tool voor iedereen behalve die ene collega.
 
 In n8n moet daarnaast:
 
@@ -103,7 +114,7 @@ n8n Cloud staat achter een gateway die een verbinding na ongeveer honderd
 seconden verbreekt. Een uitgebreide onderzoeksvraag duurt langer, en dan is het
 antwoord wél gemaakt maar kan de pagina het niet meer ontvangen.
 
-Vul daarvoor onder **Instellingen** ook een **Resultaat-URL** in. De pagina laat
+Daarvoor is `PRM_RESULTAAT_URL` er. De pagina laat
 de verbinding dan los zodra de vraag verstuurd is, en haalt het antwoord daarna
 apart op — net zolang tot het klaar staat, tot maximaal tien minuten. Hoe je die
 tweede workflow opzet staat in [`n8n/buddy-data/LEESMIJ.md`](n8n/buddy-data/LEESMIJ.md).
@@ -129,9 +140,9 @@ Hoe je die controle in PRM 1 hangt staat in
 [`n8n/buddy-data/LEESMIJ.md`](n8n/buddy-data/LEESMIJ.md); PRM 4 en PRM 5 hebben
 hem al ingebouwd.
 
-Het veld voor gebruiker en wachtwoord rechtsboven blijft bestaan voor *Basic
-Auth* op de Chat Trigger. Dat is nu een extra slot en niet meer het enige. Die
-gegevens worden nergens opgeslagen — na een refresh typ je ze opnieuw.
+Zet **Basic Auth op de Chat Trigger uit**. De pagina heeft geen veld meer voor
+een gebruikersnaam en wachtwoord, dus met dat slot erop komt er niets meer
+binnen.
 
 ## Twee dingen die het vaakst misgaan
 

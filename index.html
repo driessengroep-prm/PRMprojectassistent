@@ -50,7 +50,6 @@
   .merk .naam{font-size:16px;font-weight:600;color:var(--teal);letter-spacing:-.01em;line-height:1.2}
   .merk .sub{font-size:12.5px;color:var(--goud);font-weight:500;line-height:1.2}
 
-  .kopknoppen{margin-left:auto;display:flex;gap:8px;align-items:center}
   .knop-licht{
     background:transparent;color:var(--teal);border:1.5px solid var(--lijn);
     font-family:var(--ui);font-size:13.5px;font-weight:500;
@@ -58,22 +57,7 @@
   }
   .knop-licht:hover{border-color:var(--teal);background:var(--creme)}
   .knop-licht:focus-visible{outline:2px solid var(--koraal-diep);outline-offset:2px}
-  .knop-licht[aria-expanded="true"]{background:var(--creme);border-color:var(--goud)}
   #lade{display:none;padding:8px 13px;font-size:16px;line-height:1}
-
-  /* ---------- instellingen ---------- */
-  .instellingen{background:var(--creme);border-bottom:1px solid var(--lijn);padding:16px 24px;flex:none}
-  body:not([data-instellingen="open"]) .instellingen{display:none}
-  .instellingen .rij{max-width:1000px;margin:0 auto;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
-  .veld{display:flex;flex-direction:column;gap:5px;flex:1 1 260px;min-width:0}
-  .veld.smal{flex:0 1 170px}
-  .veld label{font-size:12px;font-weight:500;color:var(--grijs)}
-  .veld input{
-    font-family:var(--ui);font-size:13.5px;padding:9px 13px;
-    border:1.5px solid var(--lijn);border-radius:10px;background:var(--wit);color:var(--inkt);min-width:0;
-  }
-  .veld input:focus{outline:2px solid var(--goud);outline-offset:-1px;border-color:transparent}
-  .uitleg{max-width:1000px;margin:10px auto 0;font-size:12.5px;color:var(--grijs)}
 
   /* ---------- werkblad: zijbalk + kolom ---------- */
   .werkblad{flex:1;display:flex;min-height:0}
@@ -455,7 +439,6 @@
   @media (max-width:860px){
     header{padding:10px 16px}
     #lade{display:block}
-    .instellingen{padding:14px 16px}
     .zijbalk{
       position:fixed;top:0;left:0;bottom:0;z-index:30;width:280px;
       transform:translateX(-100%);transition:transform .18s ease-out;box-shadow:0 0 24px rgba(0,0,0,.14);
@@ -589,56 +572,7 @@
       <div class="sub">Projectenassistent</div>
     </div>
   </div>
-  <div class="kopknoppen">
-    <button id="instelknop" class="knop-licht" type="button" aria-expanded="false" aria-controls="instellingen">Instellingen</button>
-  </div>
 </header>
-
-<div class="instellingen" id="instellingen">
-  <div class="rij">
-    <div class="veld">
-      <label for="webhook">Webhook-URL van de chat trigger</label>
-      <input id="webhook" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/chat">
-    </div>
-    <div class="veld smal">
-      <label for="gebruiker">Gebruiker <span style="font-weight:400">(bij Basic Auth)</span></label>
-      <input id="gebruiker" type="text" autocomplete="username" placeholder="gebruiker">
-    </div>
-    <div class="veld smal">
-      <label for="wachtwoord">Wachtwoord</label>
-      <input id="wachtwoord" type="password" autocomplete="current-password" placeholder="wachtwoord">
-    </div>
-  </div>
-  <div class="rij" style="margin-top:12px">
-    <div class="veld">
-      <label for="resultaat">Resultaat-URL <span style="font-weight:400">(alleen bij losse afhandeling)</span></label>
-      <input id="resultaat" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/resultaat">
-    </div>
-    <div class="veld">
-      <label for="verwijder">Verwijder-URL <span style="font-weight:400">(om een gesprek ook centraal te wissen)</span></label>
-      <input id="verwijder" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/gesprek-verwijderen">
-    </div>
-  </div>
-  <div class="rij" style="margin-top:12px">
-    <div class="veld">
-      <label for="lijst">Gesprekken-URL <span style="font-weight:400">(om je eigen gesprekken terug te lezen)</span></label>
-      <input id="lijst" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/gesprekken-ophalen">
-    </div>
-  </div>
-  <p class="uitleg">
-    De production-URL vind je in n8n op de node <em>When chat message received</em>, onder Chat URL.
-    Die wordt in deze browser onthouden, dus je hoeft hem maar &eacute;&eacute;n keer te plakken.
-    Gebruiker en wachtwoord worden bewust niet bewaard &mdash; die typ je na een refresh opnieuw.
-    <br>
-    De resultaat-URL is optioneel. Laat je hem leeg, dan wacht de pagina op het antwoord van de
-    chat trigger zelf. Vul je hem in, dan antwoordt n8n meteen en haalt de pagina het resultaat
-    daarna apart op &mdash; nodig zodra een vraag langer duurt dan de gateway toestaat.
-    <br>
-    Met een gesprekken-URL staan je eerdere gesprekken ook op een andere computer in de
-    zijbalk. Je ziet daar alleen je eigen gesprekken: n8n vraagt bij Microsoft op wie je bent
-    en zoekt op dat kenmerk, niet op wat de pagina zegt.
-  </p>
-</div>
 
 <div class="werkblad">
   <button class="sluier" id="sluier" type="button" aria-label="Zijbalk sluiten"></button>
@@ -865,71 +799,60 @@
       } catch (e) { /* niets te doen: onthouden is een gemak, geen eis */ }
     }
     return {
+      // Alleen lezen: de adressen worden niet meer in de pagina ingesteld.
+      // Wat hier nog staat komt uit de tijd dat dat wel kon.
       lees: function () { return lees("prm-webhook-v1"); },
-      schrijf: function (url) { schrijf("prm-webhook-v1", url); },
       leesResultaat: function () { return lees("prm-resultaat-v1"); },
-      schrijfResultaat: function (url) { schrijf("prm-resultaat-v1", url); },
-      leesModus: function () { return lees("prm-modus-v1") || "grondig"; },
-      schrijfModus: function (m) { schrijf("prm-modus-v1", m); },
       leesVerwijder: function () { return lees("prm-verwijder-v1"); },
-      schrijfVerwijder: function (url) { schrijf("prm-verwijder-v1", url); },
       leesLijst: function () { return lees("prm-lijst-v1"); },
-      schrijfLijst: function (url) { schrijf("prm-lijst-v1", url); }
+      leesModus: function () { return lees("prm-modus-v1") || "grondig"; },
+      schrijfModus: function (m) { schrijf("prm-modus-v1", m); }
     };
   })();
 
   var draad = document.getElementById("draad");
   var invoer = document.getElementById("bericht");
   var knop = document.getElementById("versturen");
-  var webhookVeld = document.getElementById("webhook");
-  var resultaatVeld = document.getElementById("resultaat");
-  var instelknop = document.getElementById("instelknop");
   var lijstBak = document.getElementById("gesprekken");
 
   var gesprek = null;        // het gesprek dat nu open staat, of null
   var opslagWerkt = Opslag.beschikbaar();
 
-  // Volgorde: de adresbalk wint van wat onthouden is, en dat wint van
-  // de vaste instelling bovenaan.
-  var uitUrl = new URLSearchParams(location.search).get("webhook");
-  webhookVeld.value = uitUrl || Webhook.lees() || standaard("webhook");
-  // Het paneel start altijd ingeklapt. Verstuur je iets zonder webhook,
-  // dan klapt het alsnog open met uitleg - zie versturen().
+  /* ------------------------------------------------------------------ *
+   *  DE VIER ADRESSEN                                                    *
+   *                                                                     *
+   *  Er was een paneel waarin je ze zelf plakte. Dat kon weg zodra ze    *
+   *  bij het publiceren in de pagina komen: niemand hoeft meer iets in   *
+   *  te stellen, en het wissen van site-gegevens kost je ze niet meer.   *
+   *                                                                     *
+   *  Volgorde: de adresbalk wint, dan wat is meegegeven bij het          *
+   *  publiceren, en pas daarna wat er nog in deze browser staat.         *
+   *                                                                     *
+   *  Die volgorde is met opzet anders dan vroeger. Wat onthouden is kun  *
+   *  je nu nergens meer zien of wissen; stond daar een oud adres in, dan *
+   *  zou het stilletjes het juiste overstemmen en werkt de tool voor     *
+   *  iedereen behalve die ene collega. Het blijft wel helemaal onderaan  *
+   *  staan, zodat wie hem eerder zelf plakte niet stilvalt als er bij    *
+   *  het publiceren een adres ontbreekt.                                 *
+   *                                                                     *
+   *  De adresbalk is het luik voor als er iets misgaat: met             *
+   *  ?webhook=... komt de tool aan de praat zonder opnieuw te            *
+   *  publiceren.                                                         *
+   * ------------------------------------------------------------------ */
+  var Adres = (function () {
+    var vraag = new URLSearchParams(location.search);
 
-  // Onthouden zodra het veld verandert. 'change' vuurt bij verlaten van
-  // het veld, dus ook als je meteen op Versturen klikt.
-  webhookVeld.addEventListener("change", function () {
-    Webhook.schrijf(webhookVeld.value.trim());
-  });
+    function bepaal(naam, onthouden) {
+      return (vraag.get(naam) || "").trim() || standaard(naam) || onthouden();
+    }
 
-  resultaatVeld.value = new URLSearchParams(location.search).get("resultaat") ||
-                        Webhook.leesResultaat() || standaard("resultaat");
-  resultaatVeld.addEventListener("change", function () {
-    Webhook.schrijfResultaat(resultaatVeld.value.trim());
-  });
-
-  var verwijderVeld = document.getElementById("verwijder");
-  verwijderVeld.value = new URLSearchParams(location.search).get("verwijder") ||
-                        Webhook.leesVerwijder() || standaard("verwijder");
-  verwijderVeld.addEventListener("change", function () {
-    Webhook.schrijfVerwijder(verwijderVeld.value.trim());
-  });
-
-  var lijstVeld = document.getElementById("lijst");
-  lijstVeld.value = new URLSearchParams(location.search).get("lijst") ||
-                    Webhook.leesLijst() || standaard("lijst");
-  lijstVeld.addEventListener("change", function () {
-    Webhook.schrijfLijst(lijstVeld.value.trim());
-    synchroniseer(true);
-  });
-
-  function zetInstellingen(open) {
-    document.body.setAttribute("data-instellingen", open ? "open" : "dicht");
-    instelknop.setAttribute("aria-expanded", open ? "true" : "false");
-  }
-  instelknop.addEventListener("click", function () {
-    zetInstellingen(document.body.getAttribute("data-instellingen") !== "open");
-  });
+    return {
+      chat: function () { return bepaal("webhook", Webhook.lees); },
+      resultaat: function () { return bepaal("resultaat", Webhook.leesResultaat); },
+      verwijder: function () { return bepaal("verwijder", Webhook.leesVerwijder); },
+      lijst: function () { return bepaal("lijst", Webhook.leesLijst); }
+    };
+  })();
 
   function zetLade(open) {
     document.body.setAttribute("data-zijbalk", open ? "open" : "dicht");
@@ -2152,7 +2075,7 @@
         // Wat er precies gebeurt hangt ervan af of er een verwijder-URL staat.
         // Beloven dat het ook centraal weggaat terwijl dat niet zo is, is
         // precies het soort schijn dat deze knop moest oplossen.
-        var centraal = !!verwijderVeld.value.trim();
+        var centraal = !!Adres.verwijder();
 
         vraagVenster({
           kop: "\u201C" + naam + "\u201D verwijderen?",
@@ -2623,7 +2546,7 @@
   }
 
   function verwijderGesprek(sessieId) {
-    var url = verwijderVeld.value.trim();
+    var url = Adres.verwijder();
 
     // Geen verwijder-URL ingesteld: dan is er ook niets centraal bewaard om
     // weg te halen, en blijft het bij de eigen browser.
@@ -2689,7 +2612,7 @@
   // controle bij het starten. Eenmaal halen is genoeg; alleen een nieuw
   // ingevulde URL is reden om het opnieuw te doen.
   function synchroniseer(opnieuw) {
-    var url = lijstVeld.value.trim();
+    var url = Adres.lijst();
     if (!url) { return Promise.resolve(); }
     if (lijstGehaald && !opnieuw) { return Promise.resolve(); }
     lijstGehaald = true;
@@ -2719,7 +2642,7 @@
   // Het gesprek zelf ophalen. Lukt dat, dan staat het daarna gewoon in deze
   // browser en is het de volgende keer meteen open.
   function haalBeurten(id) {
-    var url = lijstVeld.value.trim();
+    var url = Adres.lijst();
     if (!url) {
       return Promise.reject(new Error("er is geen gesprekken-URL ingesteld"));
     }
@@ -2943,17 +2866,17 @@
     var tekst = invoer.value.trim();
     if (!tekst) { return; }
 
-    var url = webhookVeld.value.trim();
+    var url = Adres.chat();
     if (!url) {
-      zetInstellingen(true);
-      toonStoring("Nog geen webhook ingesteld",
-        "Plak onder Instellingen de production-URL van de Chat Trigger. Die vind je in n8n op de node " +
-        "'When chat message received', onder Chat URL.");
-      webhookVeld.focus();
+      // Hier kan een gebruiker zelf niets aan doen: de adressen komen bij het
+      // publiceren mee. Dus geen uitleg over velden die er niet zijn, maar
+      // waar het wel aan ligt.
+      toonStoring("De assistent is nog niet gekoppeld",
+        "Deze pagina weet niet naar welke workflow ze de vraag moet sturen. Dat is een " +
+        "instelling bij het publiceren en niets wat je hier kunt oplossen. Geef het door " +
+        "aan de beheerder van de tool.");
       return;
     }
-    Webhook.schrijf(url);   // vangnet, mocht 'change' niet gevuurd hebben
-
     if (!gesprek) {
       gesprek = {
         id: maakId(),
@@ -2975,7 +2898,6 @@
     invoer.style.height = "auto";
     knop.disabled = true;
     document.body.setAttribute("data-gestart", "ja");
-    zetInstellingen(false);
     toonVraag(tekst, bijlageNamen);
     // De bijlagen horen bij deze ene vraag; daarna is het veld weer leeg.
     bijlagen = [];
@@ -2986,19 +2908,16 @@
     // onderscheiden van een echte storing. Zie de uitleg in de catch hieronder.
     var begonnen = Date.now();
 
+    // Basic Auth zat hier vroeger, met een veld voor gebruiker en wachtwoord.
+    // Dat slot is vervangen door de controle bij Microsoft: die weet wie je
+    // bent in plaats van alleen dat je een wachtwoord kent.
     var kopregels = { "Content-Type": "application/json" };
-    var gebruiker = document.getElementById("gebruiker").value.trim();
-    var wachtwoord = document.getElementById("wachtwoord").value;
-    if (gebruiker || wachtwoord) {
-      kopregels.Authorization = "Basic " + btoa(gebruiker + ":" + wachtwoord);
-    }
 
     // Eigen kenmerk voor deze ene beurt. n8n hangt het antwoord straks aan dit
     // kenmerk op, zodat de pagina weet waar ze op moet wachten. De pagina
     // verzint het zelf, zodat ze niet afhankelijk is van wat n8n terugstuurt.
     var beurtId = maakId();
-    var resultaatUrl = resultaatVeld.value.trim();
-    if (resultaatUrl) { Webhook.schrijfResultaat(resultaatUrl); }
+    var resultaatUrl = Adres.resultaat();
 
     // Het inlogbewijs gaat mee in de body en niet als kopregel: de Chat
     // Trigger geeft de kopregels niet door aan de workflow, dus daar zou n8n
