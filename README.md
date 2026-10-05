@@ -98,7 +98,7 @@ antwoord wél gemaakt maar kan de pagina het niet meer ontvangen.
 Vul daarvoor onder **Instellingen** ook een **Resultaat-URL** in. De pagina laat
 de verbinding dan los zodra de vraag verstuurd is, en haalt het antwoord daarna
 apart op — net zolang tot het klaar staat, tot maximaal tien minuten. Hoe je die
-tweede workflow opzet staat in [`n8n/LEESMIJ.md`](n8n/LEESMIJ.md).
+tweede workflow opzet staat in [`n8n/buddy-data/LEESMIJ.md`](n8n/buddy-data/LEESMIJ.md).
 
 Zonder resultaat-URL blijft de pagina gewoon op het antwoord wachten. Dat werkt
 prima voor korte vragen.
