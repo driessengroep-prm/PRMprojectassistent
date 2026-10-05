@@ -60,26 +60,34 @@ de pagina zonder login.
 
 ## Koppelen aan n8n
 
-Nodig is de **production**-URL van de node *When chat message received*
-(in n8n zichtbaar als Chat URL, eindigend op `/chat`).
+De pagina gebruikt vier webhook-adressen. Die komen **bij het publiceren** in de
+pagina, uit de secrets van GitHub, zodat een collega niets hoeft in te stellen:
 
-Plak die één keer in het veld onder **Instellingen**, rechtsboven op de pagina.
-De browser onthoudt hem, dus bij een volgend bezoek staat hij er al. Gebruiker en
-wachtwoord worden bewust *niet* bewaard; die typ je na een refresh opnieuw.
+| secret | workflow |
+|---|---|
+| `PRM_WEBHOOK_URL` | PRM 1, de chat trigger (eindigt op `/chat`) |
+| `PRM_RESULTAAT_URL` | PRM 3, het resultaat ophalen |
+| `PRM_VERWIJDER_URL` | PRM 4, een gesprek verwijderen |
+| `PRM_LIJST_URL` | PRM 5, gesprekken teruglezen |
 
-Onthouden gebeurt per browser en per apparaat. Een collega die de pagina voor het
-eerst opent, plakt de URL dus zelf één keer.
+Zet ze onder *Settings → Secrets and variables → Actions*. Ze staan dus **niet**
+in deze repository, die openbaar is. Ontbreekt er een, dan blijft dat veld leeg
+en meldt het publiceerlogboek welke; de rest werkt gewoon door.
 
-Twee alternatieven:
+Ze staan wél in de pagina die iedereen kan opvragen. Dat kan, omdat alle vier de
+workflows bij Microsoft navragen wie je bent voordat ze iets doen — zie
+[Toegang beperken](#toegang-beperken). Zonder die controle is een adres in de
+pagina een open uitnodiging om je executions en tokens op te maken.
 
-1. Meegeven in de adresbalk: `prm-projectassistent.driessengroep.nl/?webhook=https://...`
-   Dat wint van wat er onthouden is. Handig als bladwijzer of om even een tweede
-   workflow te testen.
-2. Vastzetten in `index.html`, in `STANDAARD_WEBHOOK` bovenaan het script. Dan
-   werkt de pagina meteen voor iedereen — maar **deze repository staat op public**,
-   dus de URL is dan voor iedereen leesbaar. Wie hem heeft kan de workflow
-   aanroepen en verbruikt jouw executions en tokens. Doe dit alleen met *Basic
-   Auth* aan op de Chat Trigger; zie [Toegang beperken](#toegang-beperken).
+Je kunt ze altijd overschrijven onder **Instellingen**, rechtsboven op de pagina.
+Wat je daar invult wordt in je browser onthouden en wint van wat is meegebakken.
+Let op: het wissen van cookies en site-gegevens wist dat ook weer, en dan vallen
+de velden terug op de meegebakken adressen.
+
+Meegeven in de adresbalk kan ook:
+`prm-projectassistent.driessengroep.nl/?webhook=https://...` wint van allebei.
+Handig als bladwijzer of om even een tweede workflow te testen. Dat werkt ook
+met `?resultaat=`, `?verwijder=` en `?lijst=`.
 
 In n8n moet daarnaast:
 
@@ -105,13 +113,25 @@ prima voor korte vragen.
 
 ## Toegang beperken
 
-De pagina zelf bevat niets gevoeligs, maar wie de
-webhook-URL heeft, kan de workflow aanroepen en verbruikt jouw executions en tokens.
+De webhook-adressen staan in de pagina, en de pagina is op te vragen. Het slot zit
+dus niet op het adres maar op de workflow: **alle vier vragen bij Microsoft na wie
+je bent** voordat ze iets doen.
 
-Zet daarom bij de Chat Trigger **Authentication** op *Basic Auth* en koppel een
-credential. De pagina heeft rechtsboven een veld voor gebruikersnaam en wachtwoord;
-die worden als `Authorization`-header meegestuurd en nergens opgeslagen — na een
-refresh typ je ze opnieuw.
+De pagina stuurt een token mee dat Microsoft heeft uitgegeven. De workflow vraagt
+daarmee bij Microsoft Graph op wie de houder is. Wie het adres vindt maar geen
+inlog van Driessen heeft, krijgt een 401 en verder niets.
+
+Dat de browser zegt wie hij is, telt nergens mee. Daardoor kan een nagebootst
+verzoek ook niet de gesprekken van een collega opvragen of wissen, en niet
+schrijven onder het kenmerk van iemand anders.
+
+Hoe je die controle in PRM 1 hangt staat in
+[`n8n/buddy-data/LEESMIJ.md`](n8n/buddy-data/LEESMIJ.md); PRM 4 en PRM 5 hebben
+hem al ingebouwd.
+
+Het veld voor gebruiker en wachtwoord rechtsboven blijft bestaan voor *Basic
+Auth* op de Chat Trigger. Dat is nu een extra slot en niet meer het enige. Die
+gegevens worden nergens opgeslagen — na een refresh typ je ze opnieuw.
 
 ## Twee dingen die het vaakst misgaan
 

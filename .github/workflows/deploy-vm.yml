@@ -37,6 +37,14 @@ jobs:
           ssh-keyscan -H 40.115.59.118 >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Publiceren
+        # De webhook-adressen gaan bij het publiceren de pagina in en staan
+        # daarom niet in de repository. Ontbreekt er een, dan blijft dat veld
+        # leeg en plak je het adres zelf onder Instellingen.
+        env:
+          PRM_WEBHOOK_URL: ${{ secrets.PRM_WEBHOOK_URL }}
+          PRM_RESULTAAT_URL: ${{ secrets.PRM_RESULTAAT_URL }}
+          PRM_VERWIJDER_URL: ${{ secrets.PRM_VERWIJDER_URL }}
+          PRM_LIJST_URL: ${{ secrets.PRM_LIJST_URL }}
         run: ./scripts/publiceer.sh
 
       - name: Controleren
