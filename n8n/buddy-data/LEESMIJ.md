@@ -180,6 +180,39 @@ return [{
 }];
 ```
 
+## Een gesprek verwijderen
+
+De verwijderknop in de zijbalk haalde het gesprek alleen uit de browser. Nu de
+gesprekken ook centraal staan, is dat misleidend: het lijkt weg terwijl het
+bewaard blijft. `gesprek-verwijderen.json` is een complete workflow die je wél
+importeert — een nieuwe webhook-URL hoort daarbij.
+
+**Hoe de identiteit wordt vastgesteld.** De pagina stuurt een token mee dat
+Microsoft heeft uitgegeven. De workflow vraagt daarmee bij Microsoft Graph op wie
+de houder is, en gebruikt die `oid` als filter. De browser mag dus wel een
+`sessieId` noemen, maar niet wie hij is — dat stelt de server zelf vast.
+
+Daardoor levert het raden of afkijken van andermans `sessieId` niets op: de
+combinatie van dat `sessieId` met je eigen `oid` vindt nul rijen. Dat is dezelfde
+controle die de terugleesroute straks nodig heeft, dus dit werk telt dubbel.
+
+Na import:
+
+1. Kies bij *Beurten wissen* en *Gesprek wissen* de credential
+   *Buddy Data — prm_projectassistent*.
+2. Zet bij *Verzoek binnen* onder **Allowed Origins (CORS)** het adres van de
+   pagina.
+3. Activeer de workflow en plak de production-URL in de pagina, onder
+   Instellingen bij **Verwijder-URL**.
+
+In de app-registratie moet **User.Read** als gedelegeerde rechten aanstaan;
+zonder dat kan de pagina geen token voor Graph ophalen. Lukt dat niet, dan
+verwijdert de pagina niets — ook niet lokaal — en zegt ze waarom. Dat is opzet:
+half verwijderen is erger dan niet verwijderen.
+
+Eerst de beurten wissen, dan het gesprek. Andersom zou bij een fout halverwege
+het gesprek verdwijnen terwijl de inhoud blijft staan.
+
 ## Wat hierna nog komt
 
 **De zijbalk leest nog uit de browser.** De gesprekken staan straks in Buddy Data,
@@ -192,8 +225,17 @@ hij is, mag je niet geloven.
 Daarom gaat er nu bewust **géén token** mee: er is nog niets dat het controleert,
 en het zou in de uitvoeringslogboeken van n8n belanden.
 
-**Opruimen.** Zonder bewaartermijn groeit de tabel oneindig. Een workflow met een
-Schedule Trigger die alles ouder dan X maanden verwijdert, volstaat.
+**Bewaartermijn.** Bewust nog niet ingeregeld. Voor Postgres is de omvang geen
+probleem — een paar honderd gesprekken per jaar merkt niemand. Het punt is een
+ander: er staat gespreksinhoud die aan een persoon hangt. "Voorbepaalde tijd
+bewaren" mag, maar hoort een besluit te zijn en geen vergetelheid. Leg vast dat
+het zo gekozen is, en wanneer.
+
+Wat daarvoor nodig was — kúnnen verwijderen — is er nu wel; zie hierboven.
+
+**De uitvoeringen van n8n.** Daar staat meer in dan in deze tabellen: ook de
+volledige tekst van elk meegestuurd document. Dat is de grootste verzameling en
+de meest vergeten. Kijk na welke bewaartermijn daar staat ingesteld.
 
 ## Wat getest is, en wat niet
 

@@ -314,6 +314,12 @@
     color:#55625F;font-style:italic;
   }
   .doc blockquote p:last-child{margin-bottom:0}
+  /* Een brede tabel mag schuiven in plaats van de kaart op te rekken. */
+  .doc .tabelwikkel{overflow-x:auto;margin:0 0 1em;-webkit-overflow-scrolling:touch}
+  .doc table{border-collapse:collapse;width:100%;font-size:14.5px;line-height:1.45}
+  .doc th,.doc td{border:1px solid var(--lijn);padding:7px 11px;text-align:left;vertical-align:top}
+  .doc th{background:var(--creme);font-weight:600;color:var(--teal);white-space:nowrap}
+  .doc td p:last-child,.doc th p:last-child{margin-bottom:0}
 
   /* ---------- wachten ---------- */
   .wachten{display:flex;align-items:center;gap:12px;margin-bottom:26px;font-size:14.5px;color:var(--grijs)}
@@ -504,6 +510,23 @@
         email: account.username || ""
       };
 
+      // Een token waarmee de server kan vaststellen wie je bent. Dat is iets
+      // anders dan het veld hierboven: wat de browser bewéért over zichzelf mag
+      // een server niet geloven. Dit token is door Microsoft uitgegeven en bij
+      // Microsoft na te vragen; daar kun je niet omheen liegen.
+      //
+      // Voor User.Read moet die rechten in de app-registratie staan. Ontbreekt
+      // dat, dan mislukt het ophalen en verwijdert de pagina niets centraal -
+      // liever dat dan de schijn van verwijderen.
+      window.PRM_TOKEN = function () {
+        return app.acquireTokenSilent({ scopes: ["User.Read"], account: account })
+          .then(function (r) { return r.accessToken; })
+          .catch(function () {
+            return app.acquireTokenPopup({ scopes: ["User.Read"] })
+              .then(function (r) { return r.accessToken; });
+          });
+      };
+
       html.classList.remove("inloggen");
     })
     .catch(mislukt);
@@ -545,6 +568,10 @@
     <div class="veld">
       <label for="resultaat">Resultaat-URL <span style="font-weight:400">(alleen bij losse afhandeling)</span></label>
       <input id="resultaat" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/resultaat">
+    </div>
+    <div class="veld">
+      <label for="verwijder">Verwijder-URL <span style="font-weight:400">(om een gesprek ook centraal te wissen)</span></label>
+      <input id="verwijder" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/gesprek-verwijderen">
     </div>
   </div>
   <p class="uitleg">
@@ -762,7 +789,9 @@
       leesResultaat: function () { return lees("prm-resultaat-v1"); },
       schrijfResultaat: function (url) { schrijf("prm-resultaat-v1", url); },
       leesModus: function () { return lees("prm-modus-v1") || "grondig"; },
-      schrijfModus: function (m) { schrijf("prm-modus-v1", m); }
+      schrijfModus: function (m) { schrijf("prm-modus-v1", m); },
+      leesVerwijder: function () { return lees("prm-verwijder-v1"); },
+      schrijfVerwijder: function (url) { schrijf("prm-verwijder-v1", url); }
     };
   })();
 
@@ -794,6 +823,13 @@
                         Webhook.leesResultaat() || "";
   resultaatVeld.addEventListener("change", function () {
     Webhook.schrijfResultaat(resultaatVeld.value.trim());
+  });
+
+  var verwijderVeld = document.getElementById("verwijder");
+  verwijderVeld.value = new URLSearchParams(location.search).get("verwijder") ||
+                        Webhook.leesVerwijder();
+  verwijderVeld.addEventListener("change", function () {
+    Webhook.schrijfVerwijder(verwijderVeld.value.trim());
   });
 
   function zetInstellingen(open) {
@@ -1056,7 +1092,7 @@
     }
     function sluitAlles() { sluitAlinea(); sluitLijst(); sluitCitaat(); }
 
-    regels.forEach(function (regel) {
+    function verwerkRegel(regel) {
       var r = regel.trim();
       // Inspringing bepaalt het niveau; een tab telt als twee spaties.
       var inspring = regel.replace(/\t/g, "  ").match(/^ */)[0].length;
@@ -1094,10 +1130,47 @@
         return;
       }
       alinea.push(r);
-    });
+    }
+
+    for (var i = 0; i < regels.length; i++) {
+      // Een tabel herken je pas aan de scheidingsregel eronder - dezelfde
+      // regel als bij het schrijven naar Word, zodat scherm en document
+      // hetzelfde laten zien.
+      if (/^\s*\|.*\|\s*$/.test(regels[i]) && isScheiding(regels[i + 1] || "")) {
+        var rijen = [tabelCellen(regels[i])];
+        i += 2;
+        while (i < regels.length && /^\s*\|.*\|\s*$/.test(regels[i])) {
+          rijen.push(tabelCellen(regels[i]));
+          i++;
+        }
+        i--;
+        sluitAlles();
+        uit.push(htmlTabel(rijen));
+        continue;
+      }
+      verwerkRegel(regels[i]);
+    }
 
     sluitAlles();
     return uit.join("");
+  }
+
+  // De cellen zijn al ontsnapt door naarHtml; inline() doet alleen de opmaak.
+  function htmlTabel(rijen) {
+    var kolommen = rijen[0].length;
+    var html = '<div class="tabelwikkel"><table><thead><tr>';
+    rijen[0].forEach(function (cel) {
+      html += "<th>" + inline(cel.replace(/\*\*/g, "")) + "</th>";
+    });
+    html += "</tr></thead><tbody>";
+    rijen.slice(1).forEach(function (rij) {
+      html += "<tr>";
+      for (var k = 0; k < kolommen; k++) {
+        html += "<td>" + inline(rij[k] === undefined ? "" : rij[k]) + "</td>";
+      }
+      html += "</tr>";
+    });
+    return html + "</tbody></table></div>";
   }
 
   // ---------------------------------------------------------------- opbouw
@@ -1439,6 +1512,10 @@
 
   function toonStoring(kop, uitleg) {
     wegWachten();
+    // De draad is verborgen zolang er nog geen gesprek loopt. Een melding die
+    // daar in belandt zou onzichtbaar blijven - en dan lijkt het alsof er niets
+    // gebeurt. Dus zetten we de draad hoe dan ook aan.
+    document.body.setAttribute("data-gestart", "ja");
     var el = element("div", "storing");
     el.appendChild(pop(BUDDY, 34));
     el.appendChild(element("div", null, "<b>" + ontsnap(kop) + "</b>" + ontsnap(uitleg)));
@@ -1847,8 +1924,19 @@
       wis.setAttribute("aria-label", "Gesprek verwijderen: " + naam);
       wis.addEventListener("click", function () {
         if (!window.confirm("\"" + naam + "\" definitief verwijderen?")) { return; }
-        Opslag.verwijder(g.id);
-        if (gesprek && gesprek.id === g.id) { nieuwGesprek(); } else { tekenLijst(); }
+        wis.disabled = true;
+        verwijderGesprek(g.id).then(function () {
+          Opslag.verwijder(g.id);
+          if (gesprek && gesprek.id === g.id) { nieuwGesprek(); } else { tekenLijst(); }
+        }, function (fout) {
+          wis.disabled = false;
+          toonStoring("Dit gesprek is niet verwijderd",
+            "Het centrale archief gaf geen bevestiging: " + fout.message + ". Het gesprek " +
+            "staat daarom nog in je overzicht. Zou de pagina het hier wel weghalen, dan leek " +
+            "het verwijderd terwijl het centraal bewaard blijft - en dat is misleidender dan " +
+            "deze melding. Probeer het opnieuw, of controleer de verwijder-URL onder " +
+            "Instellingen.");
+        });
       });
       rij.appendChild(wis);
 
@@ -2242,6 +2330,56 @@
       });
     }
     return maakWordBestand(lichaam, verwijzingen);
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  EEN GESPREK CENTRAAL VERWIJDEREN                                    *
+   *                                                                     *
+   *  Sinds de gesprekken ook in Buddy Data staan, haalt de knop in de    *
+   *  zijbalk niet genoeg weg door alleen localStorage te legen: centraal *
+   *  bleef het staan. Dat is erger dan niet kunnen verwijderen, want het *
+   *  wekt de indruk dat het weg is.                                      *
+   *                                                                     *
+   *  Er gaat een token mee dat Microsoft heeft uitgegeven. n8n vraagt    *
+   *  daarmee bij Microsoft op wie je bent en wist alleen rijen die op    *
+   *  die persoon staan. Wat de browser zelf bewéért over wie hij is,     *
+   *  speelt geen rol - anders zou het verzoek na te bootsen zijn met het *
+   *  kenmerk van een collega.                                            *
+   * ------------------------------------------------------------------ */
+  function verwijderGesprek(sessieId) {
+    var url = verwijderVeld.value.trim();
+
+    // Geen verwijder-URL ingesteld: dan is er ook niets centraal bewaard om
+    // weg te halen, en blijft het bij de eigen browser.
+    if (!url) { return Promise.resolve(); }
+
+    if (typeof window.PRM_TOKEN !== "function") {
+      return Promise.reject(new Error("je bent niet ingelogd, dus de server kan " +
+        "niet vaststellen van wie dit gesprek is"));
+    }
+
+    return window.PRM_TOKEN()
+      .catch(function () {
+        throw new Error("het inlogbewijs kon niet worden opgehaald");
+      })
+      .then(function (token) {
+        return fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token
+          },
+          body: JSON.stringify({ sessieId: sessieId })
+        });
+      })
+      .then(function (res) {
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("de server heeft het verzoek geweigerd (" + res.status + ")");
+        }
+        if (!res.ok) {
+          throw new Error("de server antwoordde met status " + res.status);
+        }
+      });
   }
 
   // ---------------------------------------------------------------- exporteren
