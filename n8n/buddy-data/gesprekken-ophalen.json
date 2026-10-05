@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Gesprekken teruglezen\n\nDe zijbalk vraagt dit op zodra je bent ingelogd.\n\n**Twee vragen, een route**\nZonder sessieId: geef de lijst van mijn gesprekken.\nMet sessieId: geef de beurten van dat ene gesprek.\nDe pagina haalt de inhoud pas op als je een gesprek opent, zodat niet bij\nelke keer laden alles over de lijn gaat.\n\n**Waarom 'Wie ben jij' er tussen zit**\nDe oid komt uit het antwoord van Microsoft en nooit uit het verzoek. Zou de\npagina mogen zeggen wie ze is, dan kon iemand het verzoek nabootsen met het\nkenmerk van een collega en zo diens gesprekken opvragen. Nu bepaalt de\nserver het, en levert een nagebootst verzoek alleen je eigen gesprekken op.\n\n**Na import drie dingen doen**\n1. Kies bij *Ophalen* de credential *Buddy Data - prm_projectassistent*.\n2. Zet bij *Verzoek binnen* onder Allowed Origins (CORS) het adres van de pagina.\n3. Activeer de workflow en plak de production-URL in de pagina, onder\n   Instellingen bij Gesprekken-URL.",
+        "content": "## Gesprekken teruglezen\n\nDe zijbalk vraagt dit op zodra je bent ingelogd.\n\n**Twee vragen, een route**\nZonder sessieId: geef de lijst van mijn gesprekken.\nMet sessieId: geef de beurten van dat ene gesprek.\nDe pagina haalt de inhoud pas op als je een gesprek opent, zodat niet bij\nelke keer laden alles over de lijn gaat.\n\n**Waarom 'Wie ben jij' er tussen zit**\nDe oid komt uit het antwoord van Microsoft en nooit uit het verzoek. Zou de\npagina mogen zeggen wie ze is, dan kon iemand het verzoek nabootsen met het\nkenmerk van een collega en zo diens gesprekken opvragen. Nu bepaalt de\nserver het, en levert een nagebootst verzoek alleen je eigen gesprekken op.\n\n**Na import drie dingen doen**\n1. Kies bij *Ophalen* de credential *Buddy Data - prm_projectassistent*.\n2. Zet bij *Verzoek binnen* onder Allowed Origins (CORS) het adres van de pagina.\n3. Activeer de workflow en zet de production-URL in GitHub als het\n   secret PRM_LIJST_URL.",
         "height": 500,
         "width": 460
       },
@@ -11,7 +11,10 @@
       "name": "Toelichting",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-180, -60]
+      "position": [
+        -180,
+        -60
+      ]
     },
     {
       "parameters": {
@@ -26,7 +29,10 @@
       "name": "Verzoek binnen",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [340, 120],
+      "position": [
+        340,
+        120
+      ],
       "webhookId": "b7f1c2a4-5d6e-4f80-9a1b-2c3d4e5f6071"
     },
     {
@@ -49,7 +55,10 @@
       "name": "Wie ben jij",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [560, 120],
+      "position": [
+        560,
+        120
+      ],
       "onError": "continueErrorOutput"
     },
     {
@@ -60,7 +69,10 @@
       "name": "Wat wordt gevraagd",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [780, 20]
+      "position": [
+        780,
+        20
+      ]
     },
     {
       "parameters": {
@@ -84,7 +96,10 @@
       "name": "Ophalen",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1000, 20],
+      "position": [
+        1000,
+        20
+      ],
       "alwaysOutputData": true
     },
     {
@@ -95,7 +110,10 @@
       "name": "Antwoord samenstellen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1220, 20]
+      "position": [
+        1220,
+        20
+      ]
     },
     {
       "parameters": {
@@ -107,7 +125,10 @@
       "name": "Antwoorden",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1440, 20]
+      "position": [
+        1440,
+        20
+      ]
     },
     {
       "parameters": {
@@ -120,29 +141,78 @@
       "name": "Weigeren",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [780, 240]
+      "position": [
+        780,
+        240
+      ]
     }
   ],
   "connections": {
     "Verzoek binnen": {
-      "main": [[{ "node": "Wie ben jij", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Wie ben jij",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Wie ben jij": {
       "main": [
-        [{ "node": "Wat wordt gevraagd", "type": "main", "index": 0 }],
-        [{ "node": "Weigeren", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Wat wordt gevraagd",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Weigeren",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Wat wordt gevraagd": {
-      "main": [[{ "node": "Ophalen", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Ophalen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Ophalen": {
-      "main": [[{ "node": "Antwoord samenstellen", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Antwoord samenstellen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Antwoord samenstellen": {
-      "main": [[{ "node": "Antwoorden", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Antwoorden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1"
+  },
   "pinData": {}
 }

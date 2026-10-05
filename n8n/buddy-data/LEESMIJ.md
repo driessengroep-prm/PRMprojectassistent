@@ -202,8 +202,9 @@ Na import:
    *Buddy Data — prm_projectassistent*.
 2. Zet bij *Verzoek binnen* onder **Allowed Origins (CORS)** het adres van de
    pagina.
-3. Activeer de workflow en plak de production-URL in de pagina, onder
-   Instellingen bij **Verwijder-URL**.
+3. Activeer de workflow en zet de production-URL in GitHub als het secret
+   `PRM_VERWIJDER_URL` (Settings → Secrets and variables → Actions). Die komt bij
+   het publiceren in de pagina; een instellingenpaneel is er niet meer.
 
 In de app-registratie moet **User.Read** als gedelegeerde rechten aanstaan;
 zonder dat kan de pagina geen token voor Graph ophalen. Lukt dat niet, dan
@@ -270,8 +271,9 @@ Na import:
 1. Kies bij *Ophalen* de credential *Buddy Data — prm_projectassistent*.
 2. Zet bij *Verzoek binnen* onder **Allowed Origins (CORS)** het adres van de
    pagina.
-3. Activeer de workflow en plak de production-URL in de pagina, onder
-   Instellingen bij **Gesprekken-URL**.
+3. Activeer de workflow en zet de production-URL in GitHub als het secret
+   `PRM_LIJST_URL` (Settings → Secrets and variables → Actions). Die komt bij het
+   publiceren in de pagina; een instellingenpaneel is er niet meer.
 
 Zet **Always Output Data** aan op *Ophalen*, om dezelfde reden als bij PRM 3: een
 lege lijst wordt anders nul items en dan komt de Respond-node niet aan de beurt.
