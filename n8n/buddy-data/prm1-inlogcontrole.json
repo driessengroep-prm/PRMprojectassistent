@@ -1,0 +1,71 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Inlogcontrole voor PRM 1\n\nDeze drie nodes komen tussen *When chat message received* en de agent.\n\n**Waarom**\nHet adres van de chat trigger staat sinds het publiceren in de pagina, zodat\neen collega niets hoeft in te stellen. Daarmee is het ook te vinden voor wie de\npagina opvraagt. Zonder controle kan die de workflow aanroepen en je executions\nen tokens opmaken.\n\nMet deze nodes levert een gevonden adres niets op: zonder inlogbewijs van\nDriessen komt er een 401 terug en draait er niets.\n\n**En het is meteen eerlijker administreren**\nDe oid waarop de database koppelt kwam uit het verzoek - dus uit wat de browser\nbeweert. Nu komt hij uit het antwoord van Microsoft. Een nagebootst verzoek kan\ndaarmee niet langer schrijven onder het kenmerk van een collega.\n\n**Aansluiten**\n1. Haal de verbinding *When chat message received -> agent* weg.\n2. Verbind: trigger -> Wie ben jij -> Vraag terugzetten -> agent.\n3. De foutuitgang van *Wie ben jij* gaat naar *Niet ingelogd*.",
+        "height": 440,
+        "width": 440
+      },
+      "id": "c2000000-0000-4000-8000-000000000001",
+      "name": "Toelichting inlogcontrole",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, -40]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.microsoft.com/v1.0/me?$select=id,displayName,mail,userPrincipalName",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.inlogbewijs || $json.body?.inlogbewijs || '' }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "c2000000-0000-4000-8000-000000000002",
+      "name": "Wie ben jij",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [280, 60],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// De agent verwacht de velden van de chat trigger. Die zet deze node terug,\n// met de vastgestelde identiteit erbij. Zonder dit zou de agent het antwoord\n// van Microsoft als vraag voorgeschoteld krijgen.\nconst trigger = $('When chat message received').first().json;\nconst wie = $('Wie ben jij').first().json;\n\nreturn [{\n  json: {\n    ...trigger,\n    ...(trigger.body ?? {}),\n    verified_oid: wie.id ?? '',\n    verified_naam: wie.displayName ?? '',\n    verified_email: wie.mail ?? wie.userPrincipalName ?? '',\n  },\n}];"
+      },
+      "id": "c2000000-0000-4000-8000-000000000003",
+      "name": "Vraag terugzetten",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 60]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 401,
+        "responseBody": "{\n  \"status\": \"geweigerd\",\n  \"output\": \"Je bent niet (meer) ingelogd bij Microsoft, dus deze vraag is niet in behandeling genomen. Ververs de pagina en log opnieuw in.\"\n}",
+        "options": {}
+      },
+      "id": "c2000000-0000-4000-8000-000000000004",
+      "name": "Niet ingelogd",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [500, 260]
+    }
+  ],
+  "connections": {
+    "Wie ben jij": {
+      "main": [
+        [{ "node": "Vraag terugzetten", "type": "main", "index": 0 }],
+        [{ "node": "Niet ingelogd", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {}
+}

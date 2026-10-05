@@ -720,20 +720,34 @@
   /* ------------------------------------------------------------------ *
    *  INSTELLINGEN                                                       *
    *                                                                     *
-   *  De webhook-URL wordt onthouden in de browser van wie de pagina      *
-   *  gebruikt. Je plakt hem dus een keer onder Instellingen, en daarna   *
-   *  staat hij er bij elk bezoek. Het wachtwoord wordt niet bewaard.     *
+   *  De vier adressen komen er bij het publiceren in, uit de secrets van *
+   *  GitHub. Ze staan dus niet in deze repository - die is openbaar -    *
+   *  en een collega hoeft niets in te stellen om de tool te gebruiken.   *
    *                                                                     *
-   *  STANDAARD_WEBHOOK hoeft daarom leeg te blijven. Vul je hem toch in, *
-   *  dan geldt hij voor iedereen die de pagina opent - maar deze         *
-   *  repository staat op public, dus de URL is dan ook voor iedereen     *
-   *  leesbaar, en wie hem heeft kan de workflow aanroepen en verbruikt   *
-   *  jouw executions en tokens.                                          *
+   *  Ze staan wel in de pagina die iedereen kan opvragen. Dat kan,       *
+   *  omdat alle vier de workflows bij Microsoft navragen wie je bent     *
+   *  voordat ze iets doen. Wie het adres vindt maar geen inlog van       *
+   *  Driessen heeft, krijgt een 401 en verder niets.                     *
+   *                                                                     *
+   *  Zijn ze bij het publiceren niet ingevuld, dan blijven de velden     *
+   *  leeg en plak je de adressen zelf onder Instellingen. Zo werkt de    *
+   *  pagina ook rechtstreeks uit de repository.                          *
    *                                                                     *
    *  Volgorde: ?webhook=... in de adresbalk wint van wat er onthouden    *
-   *  is, en dat wint weer van de waarde hieronder.                       *
+   *  is, en dat wint weer van wat hier is meegegeven.                    *
    * ------------------------------------------------------------------ */
-  var STANDAARD_WEBHOOK = "";
+  var STANDAARD = {
+    webhook: "__PRM_WEBHOOK__",
+    resultaat: "__PRM_RESULTAAT__",
+    verwijder: "__PRM_VERWIJDER__",
+    lijst: "__PRM_LIJST__"
+  };
+
+  // Niet vervangen bij het publiceren: dan telt het als niet ingevuld.
+  function standaard(naam) {
+    var waarde = STANDAARD[naam] || "";
+    return waarde.indexOf("__PRM_") === 0 ? "" : waarde;
+  }
 
   /* ------------------------------------------------------------------ *
    *  HET TEAM                                                           *
@@ -878,7 +892,7 @@
   // Volgorde: de adresbalk wint van wat onthouden is, en dat wint van
   // de vaste instelling bovenaan.
   var uitUrl = new URLSearchParams(location.search).get("webhook");
-  webhookVeld.value = uitUrl || Webhook.lees() || STANDAARD_WEBHOOK || "";
+  webhookVeld.value = uitUrl || Webhook.lees() || standaard("webhook");
   // Het paneel start altijd ingeklapt. Verstuur je iets zonder webhook,
   // dan klapt het alsnog open met uitleg - zie versturen().
 
@@ -889,21 +903,21 @@
   });
 
   resultaatVeld.value = new URLSearchParams(location.search).get("resultaat") ||
-                        Webhook.leesResultaat() || "";
+                        Webhook.leesResultaat() || standaard("resultaat");
   resultaatVeld.addEventListener("change", function () {
     Webhook.schrijfResultaat(resultaatVeld.value.trim());
   });
 
   var verwijderVeld = document.getElementById("verwijder");
   verwijderVeld.value = new URLSearchParams(location.search).get("verwijder") ||
-                        Webhook.leesVerwijder();
+                        Webhook.leesVerwijder() || standaard("verwijder");
   verwijderVeld.addEventListener("change", function () {
     Webhook.schrijfVerwijder(verwijderVeld.value.trim());
   });
 
   var lijstVeld = document.getElementById("lijst");
   lijstVeld.value = new URLSearchParams(location.search).get("lijst") ||
-                    Webhook.leesLijst();
+                    Webhook.leesLijst() || standaard("lijst");
   lijstVeld.addEventListener("change", function () {
     Webhook.schrijfLijst(lijstVeld.value.trim());
     synchroniseer(true);
@@ -1772,6 +1786,15 @@
   // uitvoeringslogboeken van n8n belanden, en daar hoort het niet. Zodra de
   // terugleesroute er is wordt er wel een token meegestuurd - dan is er ook
   // iets dat het controleert.
+  // Het token waarmee n8n bij Microsoft kan navragen wie je bent. Lukt het
+  // niet, dan gaat de vraag zonder bewijs de deur uit: de workflow weigert
+  // hem dan met een duidelijke melding, en dat is beter dan hier al stoppen
+  // op iets wat ook een tijdelijke hapering kan zijn.
+  function inlogbewijs() {
+    if (typeof window.PRM_TOKEN !== "function") { return Promise.resolve(undefined); }
+    return window.PRM_TOKEN().catch(function () { return undefined; });
+  }
+
   function wieIsIngelogd() {
     var wie = window.PRM_GEBRUIKER;
     if (!wie || !wie.oid) { return undefined; }
@@ -2977,18 +3000,29 @@
     var resultaatUrl = resultaatVeld.value.trim();
     if (resultaatUrl) { Webhook.schrijfResultaat(resultaatUrl); }
 
-    var verzending = fetch(url, {
-      method: "POST",
-      headers: kopregels,
-      body: JSON.stringify({
-        action: "sendMessage",
-        sessionId: gesprek.id,
-        chatInput: tekst,
-        beurtId: beurtId,
-        modus: modus,
-        bijlagen: meegestuurd,
-        gebruiker: wieIsIngelogd()
-      })
+    // Het inlogbewijs gaat mee in de body en niet als kopregel: de Chat
+    // Trigger geeft de kopregels niet door aan de workflow, dus daar zou n8n
+    // er niet bij kunnen. Zonder bewijs gaat de vraag toch de deur uit - dan
+    // antwoordt n8n met een weigering, en dat leest beter dan een pagina die
+    // zelf besluit niets te doen.
+    var verzending = inlogbewijs().then(function (bewijs) {
+      return fetch(url, {
+        method: "POST",
+        headers: kopregels,
+        body: JSON.stringify({
+          action: "sendMessage",
+          sessionId: gesprek.id,
+          chatInput: tekst,
+          beurtId: beurtId,
+          modus: modus,
+          bijlagen: meegestuurd,
+          inlogbewijs: bewijs,
+          // Blijft meegaan zolang niet elke workflow de controle heeft. n8n
+          // hoort de naam uit het bewijs te gebruiken en niet deze; dit veld
+          // is wat de browser bewéért, en dat is iets anders dan wat klopt.
+          gebruiker: wieIsIngelogd()
+        })
+      });
     });
 
     var wachten;

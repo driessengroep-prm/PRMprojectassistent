@@ -213,6 +213,41 @@ half verwijderen is erger dan niet verwijderen.
 Eerst de beurten wissen, dan het gesprek. Andersom zou bij een fout halverwege
 het gesprek verdwijnen terwijl de inhoud blijft staan.
 
+## PRM 1 ook achter de inlogcontrole
+
+De vier webhook-adressen staan sinds het publiceren in de pagina, zodat een
+collega niets hoeft in te stellen. Daarmee zijn ze ook te vinden voor wie de
+pagina opvraagt. PRM 4 en PRM 5 kunnen daar tegen — die vragen bij Microsoft na
+wie je bent. PRM 1 kon dat nog niet, en dat is het dure adres: wie het vindt kan
+je executions en tokens opmaken.
+
+In `prm1-inlogcontrole.json` staan drie nodes om op het canvas van PRM 1 te
+plakken. Aansluiten:
+
+1. Haal de verbinding *When chat message received → agent* weg.
+2. Verbind: trigger → **Wie ben jij** → **Vraag terugzetten** → agent.
+3. De foutuitgang van *Wie ben jij* gaat naar **Niet ingelogd** (401).
+
+*Vraag terugzetten* is er omdat de agent de velden van de chat trigger verwacht.
+Zonder die node krijgt hij het antwoord van Microsoft als vraag voorgeschoteld.
+
+**Het bewijs gaat in de body, niet in een kopregel.** De Chat Trigger geeft de
+kopregels niet door aan de workflow, dus daar zou n8n er niet bij kunnen. Het
+veld heet `inlogbewijs`.
+
+**Meteen eerlijker administreren.** De `entra_oid` waarop de database koppelt
+kwam uit het verzoek — dus uit wat de browser beweert. *Resultaat klaarzetten
+(Buddy)* in `nodes.json` gebruikt nu de identiteit uit het antwoord van
+Microsoft, met wat de pagina meestuurt als terugval zolang je de nieuwe node nog
+niet hebt aangesloten. Een nagebootst verzoek kan daarmee niet langer schrijven
+onder het kenmerk van een collega.
+
+> **Let op — het token staat in de uitvoering.** Het komt binnen in de body en is
+> daarmee terug te lezen in de executions van n8n, zolang die bewaard blijven.
+> Het verloopt binnen een uur en geeft alleen toegang tot `User.Read`, maar het is
+> een reden te meer om de bewaartermijn van uitvoeringen kort te zetten. Hetzelfde
+> geldt voor PRM 4 en PRM 5, waar het in een kopregel zit.
+
 ## Je eigen gesprekken teruglezen
 
 De zijbalk las alleen uit de browser. Wie op een andere computer inlogde, zag een
