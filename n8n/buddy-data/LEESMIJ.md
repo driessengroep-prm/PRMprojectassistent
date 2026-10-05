@@ -123,20 +123,33 @@ Verwijder daarna de oude Excel-nodes en de werkmap.
 HTTP Request met dezelfde credential:
 
 ```
-GET https://buddy.driessengroep.nl/data/beurten?beurt_id=eq.{{ $json.query.beurtId }}&select=advies,forum
+GET https://buddy.driessengroep.nl/data/beurten?beurt_id=eq.{{ $json.query.beurtId }}&select=beurt_id,advies,forum
 Header: Accept-Profile: app_prm_projectassistent
 ```
 
-Zet **Always Output Data** aan, net als nu: zonder dat stopt de workflow zodra de
-rij er nog niet is en krijgt de pagina niets in plaats van `bezig`.
+Vraag `beurt_id` expliciet op in de selectie. Daarmee kun je straks zien of er
+werkelijk een rij is: een advies kan leeg zijn, een gevuld `beurt_id` niet.
+
+Zet **Always Output Data** aan. Dat is hier geen detail maar de kern. PostgREST
+geeft een lege lijst terug zolang de rij er nog niet is, en n8n maakt van een
+lege lijst nul items — dan stopt de workflow, komt de Respond-node niet aan de
+beurt, en krijgt de pagina niets in plaats van `bezig`. Met Always Output Data
+levert de node een leeg item en loopt het door.
 
 *Antwoord samenstellen* wordt eenvoudiger — het forum hoeft niet meer uit zes
 kolommen aan elkaar geplakt te worden:
 
 ```js
-const rij = $input.first()?.json?.[0];      // PostgREST geeft een array terug
-if (!rij) { return [{ json: { status: 'bezig' } }]; }
-return [{ json: { status: 'klaar', output: rij.advies ?? '', forum: rij.forum ?? [] } }];
+// Hoe n8n een lijst teruggeeft verschilt per versie: soms een item per rij,
+// soms één item met de hele lijst erin. Daarom vangen we beide vormen op.
+const binnen = $input.first()?.json ?? {};
+const rij = Array.isArray(binnen) ? binnen[0] : binnen;
+
+if (!rij || !rij.beurt_id) { return [{ json: { status: 'bezig' } }]; }
+
+return [{
+  json: { status: 'klaar', output: rij.advies ?? '', forum: rij.forum ?? [] },
+}];
 ```
 
 ## Wat hierna nog komt
