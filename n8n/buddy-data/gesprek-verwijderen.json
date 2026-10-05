@@ -1,0 +1,250 @@
+{
+  "name": "PRM 4 - Gesprek verwijderen",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Gesprek verwijderen\n\nDe zijbalk roept dit aan als iemand een gesprek weggooit.\n\n**Waarom hier een extra stap zit**\nDe pagina stuurt een token mee dat Microsoft heeft uitgegeven. 'Wie ben jij'\nvraagt deze workflow bij Microsoft zelf op, en niet aan de browser: wat een\nbrowser over zichzelf beweert is na te bootsen, een token niet.\n\nDe oid uit dat antwoord gaat daarna als filter mee in beide verwijderingen.\nDaardoor kan iemand die het sessie_id van een collega raadt of afkijkt er nog\nsteeds niets mee: de combinatie sessie_id + eigen oid levert dan nul rijen.\n\n**Na import drie dingen doen**\n1. Kies bij beide Buddy-nodes de credential *Buddy Data - prm_projectassistent*.\n2. Zet bij *Verzoek binnen* onder Allowed Origins (CORS) het adres van de pagina.\n3. Activeer de workflow en plak de production-URL in de pagina, onder\n   Instellingen bij Verwijder-URL.\n\n**Volgorde van verwijderen**: eerst de beurten, dan het gesprek. Andersom zou\nbij een fout halverwege een gesprek verdwijnen terwijl de inhoud blijft staan.",
+        "height": 560,
+        "width": 420,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        -120
+      ],
+      "id": "e1000000-0000-4000-8000-000000000001",
+      "name": "Toelichting"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gesprek-verwijderen",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://prm-projectassistent.driessengroep.nl"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -420,
+        0
+      ],
+      "id": "e1000000-0000-4000-8000-000000000002",
+      "name": "Verzoek binnen",
+      "webhookId": "c4d2e8a1-7b36-4f52-9e18-3a7c5d2b9f40"
+    },
+    {
+      "parameters": {
+        "url": "https://graph.microsoft.com/v1.0/me?$select=id",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.headers.authorization }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "e1000000-0000-4000-8000-000000000003",
+      "name": "Wie ben jij",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// De oid komt uit het antwoord van Microsoft, het sessie_id uit het\n// verzoek. Beide gaan straks als filter mee; samen zorgen ze ervoor dat\n// je alleen je eigen gesprek kunt wissen.\nconst wie = $input.first().json;\nconst verzoek = $('Verzoek binnen').first().json;\nconst sessieId = verzoek.body?.sessieId ?? verzoek.sessieId ?? '';\n\nif (!wie.id) { throw new Error('geen identiteit uit het token'); }\nif (!sessieId) { throw new Error('geen sessieId meegestuurd'); }\n\nreturn [{ json: { entra_oid: wie.id, sessie_id: sessieId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        0
+      ],
+      "id": "e1000000-0000-4000-8000-000000000004",
+      "name": "Filter samenstellen"
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://buddy.driessengroep.nl/data/beurten?sessie_id=eq.{{ $json.sessie_id }}&entra_oid=eq.{{ $json.entra_oid }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Profile",
+              "value": "app_prm_projectassistent"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        -60
+      ],
+      "id": "e1000000-0000-4000-8000-000000000005",
+      "name": "Beurten wissen",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://buddy.driessengroep.nl/data/gesprekken?sessie_id=eq.{{ $('Filter samenstellen').first().json.sessie_id }}&entra_oid=eq.{{ $('Filter samenstellen').first().json.entra_oid }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Profile",
+              "value": "app_prm_projectassistent"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        -60
+      ],
+      "id": "e1000000-0000-4000-8000-000000000006",
+      "name": "Gesprek wissen",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"verwijderd\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        -60
+      ],
+      "id": "e1000000-0000-4000-8000-000000000007",
+      "name": "Bevestigen"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 401,
+        "responseBody": "{\n  \"status\": \"geweigerd\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        160
+      ],
+      "id": "e1000000-0000-4000-8000-000000000008",
+      "name": "Weigeren"
+    }
+  ],
+  "connections": {
+    "Verzoek binnen": {
+      "main": [
+        [
+          {
+            "node": "Wie ben jij",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wie ben jij": {
+      "main": [
+        [
+          {
+            "node": "Filter samenstellen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Weigeren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter samenstellen": {
+      "main": [
+        [
+          {
+            "node": "Beurten wissen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Beurten wissen": {
+      "main": [
+        [
+          {
+            "node": "Gesprek wissen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gesprek wissen": {
+      "main": [
+        [
+          {
+            "node": "Bevestigen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

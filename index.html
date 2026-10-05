@@ -314,6 +314,12 @@
     color:#55625F;font-style:italic;
   }
   .doc blockquote p:last-child{margin-bottom:0}
+  /* Een brede tabel mag schuiven in plaats van de kaart op te rekken. */
+  .doc .tabelwikkel{overflow-x:auto;margin:0 0 1em;-webkit-overflow-scrolling:touch}
+  .doc table{border-collapse:collapse;width:100%;font-size:14.5px;line-height:1.45}
+  .doc th,.doc td{border:1px solid var(--lijn);padding:7px 11px;text-align:left;vertical-align:top}
+  .doc th{background:var(--creme);font-weight:600;color:var(--teal);white-space:nowrap}
+  .doc td p:last-child,.doc th p:last-child{margin-bottom:0}
 
   /* ---------- wachten ---------- */
   .wachten{display:flex;align-items:center;gap:12px;margin-bottom:26px;font-size:14.5px;color:var(--grijs)}
@@ -336,6 +342,47 @@
     border-radius:18px;padding:15px 18px;margin-bottom:26px;font-size:14.5px;line-height:1.55;
   }
   .storing b{display:block;margin-bottom:3px;color:var(--koraal-diep);font-weight:600}
+
+  /* ---------- venster ---------- */
+  /* Een eigen venster in plaats van confirm() en prompt() van de browser.
+     Die zien er per browser anders uit, staan bovenaan het scherm geplakt
+     en noemen het adres van de site - alsof de vraag ergens anders vandaan
+     komt. <dialog> doet het werk dat ze wel goed deden: toetsenbord erin
+     houden, Escape sluiten, en de focus terugzetten waar hij vandaan kwam. */
+  .venster{
+    border:0;padding:0;background:transparent;max-width:420px;width:calc(100% - 32px);
+    color:var(--inkt);
+  }
+  .venster::backdrop{background:rgba(38,48,47,.38)}
+  .venster .kaart{
+    background:var(--wit);border:1.5px solid var(--lijn);border-radius:20px;
+    padding:24px 26px 20px;box-shadow:0 14px 40px rgba(38,48,47,.18);
+    font-family:var(--ui);
+  }
+  .venster h2{margin:0 0 8px;font-size:17px;font-weight:600;color:var(--teal);line-height:1.35}
+  .venster p{margin:0;font-size:14.5px;line-height:1.55;color:var(--grijs)}
+  .venster input{
+    width:100%;margin-top:16px;padding:10px 13px;font-family:var(--ui);font-size:15px;
+    border:1.5px solid var(--lijn);border-radius:10px;background:var(--wit);color:var(--inkt);
+  }
+  .venster input:focus{outline:2px solid var(--goud);outline-offset:-1px;border-color:transparent}
+  .venster .knoppen{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}
+  .venster button{
+    font-family:var(--ui);font-size:14px;font-weight:600;
+    padding:9px 20px;border-radius:999px;cursor:pointer;
+  }
+  .venster .nee{background:transparent;color:var(--grijs);border:1.5px solid var(--lijn)}
+  .venster .nee:hover{border-color:var(--teal);color:var(--teal);background:var(--creme)}
+  .venster .ja{background:var(--koraal);color:var(--wit);border:1.5px solid var(--koraal)}
+  .venster .ja:hover{background:var(--koraal-diep);border-color:var(--koraal-diep)}
+  .venster button:focus-visible{outline:2px solid var(--koraal-diep);outline-offset:2px}
+  .venster[open]{animation:venster-op .16s ease-out}
+  .venster[open]::backdrop{animation:sluier-op .16s ease-out}
+  @keyframes venster-op{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes sluier-op{from{opacity:0}to{opacity:1}}
+  @media (prefers-reduced-motion:reduce){
+    .venster[open],.venster[open]::backdrop{animation:none}
+  }
 
   /* ---------- invoer ---------- */
   footer{background:var(--wit);padding:14px 24px 16px;flex:none}
@@ -504,7 +551,28 @@
         email: account.username || ""
       };
 
+      // Een token waarmee de server kan vaststellen wie je bent. Dat is iets
+      // anders dan het veld hierboven: wat de browser bewéért over zichzelf mag
+      // een server niet geloven. Dit token is door Microsoft uitgegeven en bij
+      // Microsoft na te vragen; daar kun je niet omheen liegen.
+      //
+      // Voor User.Read moet die rechten in de app-registratie staan. Ontbreekt
+      // dat, dan mislukt het ophalen en verwijdert de pagina niets centraal -
+      // liever dat dan de schijn van verwijderen.
+      window.PRM_TOKEN = function () {
+        return app.acquireTokenSilent({ scopes: ["User.Read"], account: account })
+          .then(function (r) { return r.accessToken; })
+          .catch(function () {
+            return app.acquireTokenPopup({ scopes: ["User.Read"] })
+              .then(function (r) { return r.accessToken; });
+          });
+      };
+
       html.classList.remove("inloggen");
+
+      // De pagina-code draait verderop en kan niet weten wanneer dit klaar is.
+      // Daarom een seintje in plaats van wachten of pollen.
+      window.dispatchEvent(new CustomEvent("prm-ingelogd"));
     })
     .catch(mislukt);
 })();
@@ -546,6 +614,16 @@
       <label for="resultaat">Resultaat-URL <span style="font-weight:400">(alleen bij losse afhandeling)</span></label>
       <input id="resultaat" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/resultaat">
     </div>
+    <div class="veld">
+      <label for="verwijder">Verwijder-URL <span style="font-weight:400">(om een gesprek ook centraal te wissen)</span></label>
+      <input id="verwijder" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/gesprek-verwijderen">
+    </div>
+  </div>
+  <div class="rij" style="margin-top:12px">
+    <div class="veld">
+      <label for="lijst">Gesprekken-URL <span style="font-weight:400">(om je eigen gesprekken terug te lezen)</span></label>
+      <input id="lijst" type="url" placeholder="https://jouw-n8n/webhook/&lt;id&gt;/gesprekken-ophalen">
+    </div>
   </div>
   <p class="uitleg">
     De production-URL vind je in n8n op de node <em>When chat message received</em>, onder Chat URL.
@@ -555,6 +633,10 @@
     De resultaat-URL is optioneel. Laat je hem leeg, dan wacht de pagina op het antwoord van de
     chat trigger zelf. Vul je hem in, dan antwoordt n8n meteen en haalt de pagina het resultaat
     daarna apart op &mdash; nodig zodra een vraag langer duurt dan de gateway toestaat.
+    <br>
+    Met een gesprekken-URL staan je eerdere gesprekken ook op een andere computer in de
+    zijbalk. Je ziet daar alleen je eigen gesprekken: n8n vraagt bij Microsoft op wie je bent
+    en zoekt op dat kenmerk, niet op wat de pagina zegt.
   </p>
 </div>
 
@@ -618,6 +700,18 @@
     </footer>
   </div>
 </div>
+
+<dialog class="venster" id="venster" aria-labelledby="venster-kop">
+  <form method="dialog" class="kaart">
+    <h2 id="venster-kop"></h2>
+    <p id="venster-tekst"></p>
+    <input id="venster-invoer" type="text" hidden>
+    <div class="knoppen">
+      <button type="submit" value="nee" class="nee" id="venster-nee">Annuleren</button>
+      <button type="submit" value="ja" class="ja" id="venster-ja">Ja</button>
+    </div>
+  </form>
+</dialog>
 
 <script>
 (function () {
@@ -762,7 +856,11 @@
       leesResultaat: function () { return lees("prm-resultaat-v1"); },
       schrijfResultaat: function (url) { schrijf("prm-resultaat-v1", url); },
       leesModus: function () { return lees("prm-modus-v1") || "grondig"; },
-      schrijfModus: function (m) { schrijf("prm-modus-v1", m); }
+      schrijfModus: function (m) { schrijf("prm-modus-v1", m); },
+      leesVerwijder: function () { return lees("prm-verwijder-v1"); },
+      schrijfVerwijder: function (url) { schrijf("prm-verwijder-v1", url); },
+      leesLijst: function () { return lees("prm-lijst-v1"); },
+      schrijfLijst: function (url) { schrijf("prm-lijst-v1", url); }
     };
   })();
 
@@ -794,6 +892,21 @@
                         Webhook.leesResultaat() || "";
   resultaatVeld.addEventListener("change", function () {
     Webhook.schrijfResultaat(resultaatVeld.value.trim());
+  });
+
+  var verwijderVeld = document.getElementById("verwijder");
+  verwijderVeld.value = new URLSearchParams(location.search).get("verwijder") ||
+                        Webhook.leesVerwijder();
+  verwijderVeld.addEventListener("change", function () {
+    Webhook.schrijfVerwijder(verwijderVeld.value.trim());
+  });
+
+  var lijstVeld = document.getElementById("lijst");
+  lijstVeld.value = new URLSearchParams(location.search).get("lijst") ||
+                    Webhook.leesLijst();
+  lijstVeld.addEventListener("change", function () {
+    Webhook.schrijfLijst(lijstVeld.value.trim());
+    synchroniseer(true);
   });
 
   function zetInstellingen(open) {
@@ -1056,7 +1169,7 @@
     }
     function sluitAlles() { sluitAlinea(); sluitLijst(); sluitCitaat(); }
 
-    regels.forEach(function (regel) {
+    function verwerkRegel(regel) {
       var r = regel.trim();
       // Inspringing bepaalt het niveau; een tab telt als twee spaties.
       var inspring = regel.replace(/\t/g, "  ").match(/^ */)[0].length;
@@ -1094,10 +1207,47 @@
         return;
       }
       alinea.push(r);
-    });
+    }
+
+    for (var i = 0; i < regels.length; i++) {
+      // Een tabel herken je pas aan de scheidingsregel eronder - dezelfde
+      // regel als bij het schrijven naar Word, zodat scherm en document
+      // hetzelfde laten zien.
+      if (/^\s*\|.*\|\s*$/.test(regels[i]) && isScheiding(regels[i + 1] || "")) {
+        var rijen = [tabelCellen(regels[i])];
+        i += 2;
+        while (i < regels.length && /^\s*\|.*\|\s*$/.test(regels[i])) {
+          rijen.push(tabelCellen(regels[i]));
+          i++;
+        }
+        i--;
+        sluitAlles();
+        uit.push(htmlTabel(rijen));
+        continue;
+      }
+      verwerkRegel(regels[i]);
+    }
 
     sluitAlles();
     return uit.join("");
+  }
+
+  // De cellen zijn al ontsnapt door naarHtml; inline() doet alleen de opmaak.
+  function htmlTabel(rijen) {
+    var kolommen = rijen[0].length;
+    var html = '<div class="tabelwikkel"><table><thead><tr>';
+    rijen[0].forEach(function (cel) {
+      html += "<th>" + inline(cel.replace(/\*\*/g, "")) + "</th>";
+    });
+    html += "</tr></thead><tbody>";
+    rijen.slice(1).forEach(function (rij) {
+      html += "<tr>";
+      for (var k = 0; k < kolommen; k++) {
+        html += "<td>" + inline(rij[k] === undefined ? "" : rij[k]) + "</td>";
+      }
+      html += "</tr>";
+    });
+    return html + "</tbody></table></div>";
   }
 
   // ---------------------------------------------------------------- opbouw
@@ -1106,6 +1256,65 @@
     if (klasse) { el.className = klasse; }
     if (html !== undefined) { el.innerHTML = html; }
     return el;
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  VRAGEN IN DE STIJL VAN DE TOOL                                      *
+   *                                                                     *
+   *  confirm() en prompt() van de browser zien er per browser anders     *
+   *  uit, plakken bovenaan het scherm en zetten het adres van de site    *
+   *  erboven - alsof de vraag ergens anders vandaan komt dan uit deze    *
+   *  pagina.                                                             *
+   *                                                                     *
+   *  <dialog> doet wel wat ze goed deden: de focus blijft binnen het     *
+   *  venster, Escape sluit het, en daarna springt de focus terug naar    *
+   *  de knop waar je vandaan kwam.                                       *
+   *                                                                     *
+   *  Antwoord: null als er is afgezien, anders true of de ingetypte      *
+   *  tekst. Dat is dezelfde afspraak als bij prompt(), zodat de          *
+   *  aanroepen eenvoudig blijven.                                        *
+   * ------------------------------------------------------------------ */
+  var venster = document.getElementById("venster");
+  var vensterKop = document.getElementById("venster-kop");
+  var vensterTekst = document.getElementById("venster-tekst");
+  var vensterInvoer = document.getElementById("venster-invoer");
+  var vensterJa = document.getElementById("venster-ja");
+
+  // Enter in het tekstveld hoort te bevestigen. Zonder dit kiest de browser
+  // de eerste knop in het formulier, en dat is Annuleren.
+  vensterInvoer.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); vensterJa.click(); }
+  });
+
+  function vraagVenster(opties) {
+    var metInvoer = typeof opties.waarde === "string";
+
+    // Een browser zonder <dialog> krijgt alsnog de vraag voorgelegd. Lelijk
+    // is beter dan iets ongemerkt verwijderen.
+    if (typeof venster.showModal !== "function") {
+      if (metInvoer) { return Promise.resolve(window.prompt(opties.kop, opties.waarde)); }
+      return Promise.resolve(window.confirm(opties.kop) ? true : null);
+    }
+
+    vensterKop.textContent = opties.kop;
+    vensterTekst.textContent = opties.tekst || "";
+    vensterTekst.hidden = !opties.tekst;
+    vensterJa.textContent = opties.ja || "Ja";
+    vensterInvoer.hidden = !metInvoer;
+    vensterInvoer.value = metInvoer ? opties.waarde : "";
+
+    venster.returnValue = "";   // blijft anders staan van de vorige keer
+    venster.showModal();
+    if (metInvoer) { vensterInvoer.focus(); vensterInvoer.select(); }
+    else { vensterJa.focus(); }
+
+    return new Promise(function (klaar) {
+      venster.addEventListener("close", function eenmaal() {
+        venster.removeEventListener("close", eenmaal);
+        if (venster.returnValue !== "ja") { klaar(null); return; }
+        klaar(metInvoer ? vensterInvoer.value : true);
+      });
+    });
   }
 
   function toonVraag(tekst, meegestuurd) {
@@ -1439,6 +1648,10 @@
 
   function toonStoring(kop, uitleg) {
     wegWachten();
+    // De draad is verborgen zolang er nog geen gesprek loopt. Een melding die
+    // daar in belandt zou onzichtbaar blijven - en dan lijkt het alsof er niets
+    // gebeurt. Dus zetten we de draad hoe dan ook aan.
+    document.body.setAttribute("data-gestart", "ja");
     var el = element("div", "storing");
     el.appendChild(pop(BUDDY, 34));
     el.appendChild(element("div", null, "<b>" + ontsnap(kop) + "</b>" + ontsnap(uitleg)));
@@ -1736,6 +1949,10 @@
   function openGesprek(id) {
     var g = Opslag.lees(id);
     if (!g) { return; }
+
+    // Uit de lijst gekomen, inhoud nog niet opgehaald. Eerst halen, dan tonen.
+    if (g.opServer && !(g.beurten || []).length) { haalBinnen(g); return; }
+
     gesprek = g;
     draad.innerHTML = "";
     document.body.setAttribute("data-gestart", "ja");
@@ -1746,6 +1963,51 @@
     zetLade(false);
     tekenLijst();
     document.querySelector("main").scrollTop = 0;
+  }
+
+  // Het gesprek staat wel in de lijst maar nog niet in deze browser. Tijdens
+  // het ophalen staat er iets op het scherm: een lege draad zou lijken alsof
+  // het gesprek leeg is.
+  function haalBinnen(g) {
+    gesprek = null;
+    draad.innerHTML = "";
+    document.body.setAttribute("data-gestart", "ja");
+    zetLade(false);
+    tekenLijst();
+
+    var bezig = element("div", "wachten",
+      "<b>" + ontsnap(gesprekNaam(g)) + "</b> staat in het archief, even ophalen" +
+      '<span class="stipjes"><span></span><span></span><span></span></span>');
+    draad.appendChild(bezig);
+
+    haalBeurten(g.id).then(function (beurten) {
+      draad.innerHTML = "";
+
+      if (!beurten.length) {
+        toonStoring("Dit gesprek is niet meer terug te vinden",
+          "Het staat wel in de lijst, maar er horen geen vragen en antwoorden meer bij. " +
+          "Waarschijnlijk is het eerder verwijderd. Je kunt het hier weggooien met het " +
+          "kruisje in de zijbalk.");
+        return;
+      }
+
+      g.beurten = beurten;
+      g.opServer = false;        // vanaf nu staat het gewoon hier
+      try { Opslag.schrijf(g); } catch (e) { /* alleen deze sessie dan */ }
+      gesprek = g;
+
+      beurten.forEach(function (beurt) {
+        toonVraag(beurt.vraag, beurt.bijlagen);
+        toonAntwoord(beurt.forum, beurt.advies);
+      });
+      tekenLijst();
+      document.querySelector("main").scrollTop = 0;
+    }, function (fout) {
+      draad.innerHTML = "";
+      toonStoring("Dit gesprek kon niet worden opgehaald",
+        fout.message + ". Het gesprek blijft in de lijst staan, dus je kunt het zo " +
+        "nog eens proberen.");
+    });
   }
 
   function wanneer(tijd) {
@@ -1781,14 +2043,26 @@
       return;
     }
 
+    // Lukte het teruglezen niet, dan hoort dat eronder te staan. Juist bij een
+    // lege lijst: dan is het verschil tussen 'je hebt er geen' en 'ik kon er
+    // niet bij' het hele verhaal.
+    function meldStoring() {
+      if (!lijstStoring) { return; }
+      lijstBak.appendChild(element("div", "leeg",
+        "Eerdere gesprekken van een andere computer konden niet worden opgehaald: " +
+        ontsnap(lijstStoring) + ". Wat hier staat werkt gewoon."));
+    }
+
     var alles = Opslag.lijst();
     if (!alles.length) {
       lijstBak.appendChild(element("div", "leeg",
         "Nog geen eerdere gesprekken. Zodra je een vraag stelt, verschijnt het gesprek hier."));
+      meldStoring();
       return;
     }
 
     var vorigeGroep = null;
+
     alles.forEach(function (g) {
       var groep = groepVan(g.bijgewerkt);
       if (groep !== vorigeGroep) {
@@ -1817,20 +2091,26 @@
       hernoem.title = "Hernoemen";
       hernoem.setAttribute("aria-label", "Gesprek hernoemen: " + naam);
       hernoem.addEventListener("click", function () {
-        var gekozen = window.prompt("Nieuwe naam voor dit gesprek:", naam);
-        if (gekozen === null) { return; }
-        gekozen = gekozen.trim();
-        if (!gekozen) { return; }
-        var opgeslagen = Opslag.lees(g.id);
-        if (!opgeslagen) { return; }
-        opgeslagen.titel = gekozen.slice(0, 80);
-        opgeslagen.zelfBenoemd = true;   // hierna niet meer zelf afleiden
-        try { Opslag.schrijf(opgeslagen); } catch (e) { /* naam niet kwijt kunnen: laat staan */ }
-        if (gesprek && gesprek.id === g.id) {
-          gesprek.titel = opgeslagen.titel;
-          gesprek.zelfBenoemd = true;
-        }
-        tekenLijst();
+        vraagVenster({
+          kop: "Gesprek hernoemen",
+          tekst: "De naam staat alleen in je eigen overzicht.",
+          waarde: naam,
+          ja: "Opslaan"
+        }).then(function (gekozen) {
+          if (gekozen === null) { return; }
+          gekozen = gekozen.trim();
+          if (!gekozen) { return; }
+          var opgeslagen = Opslag.lees(g.id);
+          if (!opgeslagen) { return; }
+          opgeslagen.titel = gekozen.slice(0, 80);
+          opgeslagen.zelfBenoemd = true;   // hierna niet meer zelf afleiden
+          try { Opslag.schrijf(opgeslagen); } catch (e) { /* naam niet kwijt kunnen: laat staan */ }
+          if (gesprek && gesprek.id === g.id) {
+            gesprek.titel = opgeslagen.titel;
+            gesprek.zelfBenoemd = true;
+          }
+          tekenLijst();
+        });
       });
       rij.appendChild(hernoem);
 
@@ -1846,14 +2126,41 @@
       wis.title = "Verwijderen";
       wis.setAttribute("aria-label", "Gesprek verwijderen: " + naam);
       wis.addEventListener("click", function () {
-        if (!window.confirm("\"" + naam + "\" definitief verwijderen?")) { return; }
-        Opslag.verwijder(g.id);
-        if (gesprek && gesprek.id === g.id) { nieuwGesprek(); } else { tekenLijst(); }
+        // Wat er precies gebeurt hangt ervan af of er een verwijder-URL staat.
+        // Beloven dat het ook centraal weggaat terwijl dat niet zo is, is
+        // precies het soort schijn dat deze knop moest oplossen.
+        var centraal = !!verwijderVeld.value.trim();
+
+        vraagVenster({
+          kop: "\u201C" + naam + "\u201D verwijderen?",
+          tekst: centraal
+            ? "Het gesprek verdwijnt uit je overzicht en wordt ook uit het centrale " +
+              "archief gewist. Dit kun je niet terugdraaien."
+            : "Het gesprek verdwijnt uit dit overzicht. Dit kun je niet terugdraaien.",
+          ja: "Verwijderen"
+        }).then(function (ja) {
+          if (!ja) { return; }
+          wis.disabled = true;
+          return verwijderGesprek(g.id).then(function () {
+            Opslag.verwijder(g.id);
+            if (gesprek && gesprek.id === g.id) { nieuwGesprek(); } else { tekenLijst(); }
+          }, function (fout) {
+            wis.disabled = false;
+            toonStoring("Dit gesprek is niet verwijderd",
+              "Het centrale archief gaf geen bevestiging: " + fout.message + ". Het gesprek " +
+              "staat daarom nog in je overzicht. Zou de pagina het hier wel weghalen, dan leek " +
+              "het verwijderd terwijl het centraal bewaard blijft - en dat is misleidender dan " +
+              "deze melding. Probeer het opnieuw, of controleer de verwijder-URL onder " +
+              "Instellingen.");
+          });
+        });
       });
       rij.appendChild(wis);
 
       lijstBak.appendChild(rij);
     });
+
+    meldStoring();
   }
 
   /* ------------------------------------------------------------------ *
@@ -2244,10 +2551,178 @@
     return maakWordBestand(lichaam, verwijzingen);
   }
 
+  /* ------------------------------------------------------------------ *
+   *  EEN GESPREK CENTRAAL VERWIJDEREN                                    *
+   *                                                                     *
+   *  Sinds de gesprekken ook in Buddy Data staan, haalt de knop in de    *
+   *  zijbalk niet genoeg weg door alleen localStorage te legen: centraal *
+   *  bleef het staan. Dat is erger dan niet kunnen verwijderen, want het *
+   *  wekt de indruk dat het weg is.                                      *
+   *                                                                     *
+   *  Er gaat een token mee dat Microsoft heeft uitgegeven. n8n vraagt    *
+   *  daarmee bij Microsoft op wie je bent en wist alleen rijen die op    *
+   *  die persoon staan. Wat de browser zelf bewéért over wie hij is,     *
+   *  speelt geen rol - anders zou het verzoek na te bootsen zijn met het *
+   *  kenmerk van een collega.                                            *
+   * ------------------------------------------------------------------ */
+  // Elke aanroep waarbij de server moet weten wie je bent loopt hierlangs:
+  // verwijderen en teruglezen stellen dezelfde eis en moeten hem ook op
+  // dezelfde manier stellen, anders groeien ze uit elkaar.
+  function metToken(url, lichaam) {
+    if (typeof window.PRM_TOKEN !== "function") {
+      return Promise.reject(new Error("je bent niet ingelogd, dus de server kan " +
+        "niet vaststellen wie je bent"));
+    }
+
+    return window.PRM_TOKEN()
+      .catch(function () {
+        throw new Error("het inlogbewijs kon niet worden opgehaald");
+      })
+      .then(function (token) {
+        return fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token
+          },
+          body: JSON.stringify(lichaam || {})
+        });
+      })
+      .then(function (res) {
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("de server heeft het verzoek geweigerd (" + res.status + ")");
+        }
+        if (!res.ok) {
+          throw new Error("de server antwoordde met status " + res.status);
+        }
+        return res;
+      });
+  }
+
+  function verwijderGesprek(sessieId) {
+    var url = verwijderVeld.value.trim();
+
+    // Geen verwijder-URL ingesteld: dan is er ook niets centraal bewaard om
+    // weg te halen, en blijft het bij de eigen browser.
+    if (!url) { return Promise.resolve(); }
+
+    return metToken(url, { sessieId: sessieId }).then(function () { /* klaar */ });
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  GESPREKKEN TERUGLEZEN                                               *
+   *                                                                     *
+   *  De zijbalk las tot nu toe alleen uit deze browser. Wie op een       *
+   *  andere computer inlogde zag een lege lijst, terwijl de gesprekken   *
+   *  er wel waren.                                                       *
+   *                                                                     *
+   *  Bij het inloggen haalt de pagina de lijst op: namen en datums,      *
+   *  meer niet. De inhoud van een gesprek komt pas mee als je het        *
+   *  opent. Dat scheelt bij elke keer laden een hoop over de lijn, en    *
+   *  het meeste open je toch nooit meer.                                 *
+   *                                                                     *
+   *  Je krijgt alleen je eigen gesprekken: n8n vraagt bij Microsoft op   *
+   *  wie het token toebehoort en zoekt op dat kenmerk. De pagina mag     *
+   *  niet zeggen wie ze is, anders was het verzoek na te bootsen met     *
+   *  het kenmerk van een collega.                                        *
+   * ------------------------------------------------------------------ */
+  var lijstStoring = "";       // laatste reden dat ophalen niet lukte
+  var lijstGehaald = false;    // eenmaal per bezoek is genoeg
+
+  // Een rij uit het archief wordt een gesprek zonder beurten. Die haalt de
+  // pagina pas op als je het gesprek opent; tot dan is 'opServer' het merkje
+  // dat er meer is dan hier staat.
+  function neemLijstOver(rijen) {
+    var veranderd = false;
+
+    rijen.forEach(function (r) {
+      var id = r.sessieId || r.sessie_id;
+      if (!id || Opslag.lees(id)) { return; }   // wat we al hebben is leidend
+
+      var tijd = Date.parse(r.bijgewerkt || "");
+      if (isNaN(tijd)) { tijd = Date.now(); }
+
+      try {
+        Opslag.schrijf({
+          id: id,
+          // De server bewaart de eerste vraag; daar maakt de pagina dezelfde
+          // naam van twee woorden van als bij een gesprek dat hier ontstond.
+          titel: kernwoorden(r.titel || "") || String(r.titel || "").slice(0, 60),
+          gemaakt: tijd,
+          bijgewerkt: tijd,
+          beurten: [],
+          opServer: true
+        });
+        veranderd = true;
+      } catch (e) {
+        lijstStoring = "deze browser kon ze niet bewaren (de opslag zit vol)";
+      }
+    });
+
+    return veranderd;
+  }
+
+  // Twee aanleidingen kunnen samenvallen: het seintje van het inloggen en de
+  // controle bij het starten. Eenmaal halen is genoeg; alleen een nieuw
+  // ingevulde URL is reden om het opnieuw te doen.
+  function synchroniseer(opnieuw) {
+    var url = lijstVeld.value.trim();
+    if (!url) { return Promise.resolve(); }
+    if (lijstGehaald && !opnieuw) { return Promise.resolve(); }
+    lijstGehaald = true;
+
+    return metToken(url, {})
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        lijstStoring = "";
+        var rijen = (data && data.gesprekken) || (Array.isArray(data) ? data : []);
+        if (neemLijstOver(rijen)) { tekenLijst(); }
+        else if (lijstStoring) { tekenLijst(); }
+      })
+      .catch(function (fout) {
+        // Een mislukte synchronisatie is geen reden om de pagina te laten
+        // struikelen: wat in deze browser staat werkt gewoon. Maar stil
+        // blijven is ook niet eerlijk tegen wie zijn gesprekken mist, dus
+        // het komt onderaan de zijbalk te staan.
+        //
+        // En het slot gaat er weer af: lukte het omdat het inloggen nog niet
+        // rond was, dan mag het seintje straks een nieuwe poging doen.
+        lijstGehaald = false;
+        lijstStoring = fout.message;
+        tekenLijst();
+      });
+  }
+
+  // Het gesprek zelf ophalen. Lukt dat, dan staat het daarna gewoon in deze
+  // browser en is het de volgende keer meteen open.
+  function haalBeurten(id) {
+    var url = lijstVeld.value.trim();
+    if (!url) {
+      return Promise.reject(new Error("er is geen gesprekken-URL ingesteld"));
+    }
+
+    return metToken(url, { sessieId: id })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var rijen = (data && data.beurten) || (Array.isArray(data) ? data : []);
+        return rijen.map(function (b) {
+          return {
+            vraag: b.vraag || "",
+            advies: b.advies || "",
+            forum: b.forum || null
+          };
+        });
+      });
+  }
+
   // ---------------------------------------------------------------- exporteren
   function exporteer(id) {
     var g = Opslag.lees(id);
     if (!g) { return; }
+
+    // Nog niet opgehaald: anders zou er een leeg document uitrollen. Openen
+    // haalt het binnen, en dan is downloaden een tweede klik waard.
+    if (g.opServer && !(g.beurten || []).length) { openGesprek(id); return; }
 
     var uit = ["# " + gesprekNaam(g), "", "_Programmabureau PRM · " +
                new Date(g.gemaakt).toLocaleString("nl-NL") + "_", ""];
@@ -2644,6 +3119,12 @@
   tekenTeam();
   tekenLijst();
   invoer.focus();
+
+  // Zodra duidelijk is wie er is ingelogd, halen we de eigen gesprekken op.
+  // Lokaal wordt het inloggen overgeslagen; dan gebeurt er hier niets en
+  // blijft de zijbalk doen wat ze altijd deed.
+  window.addEventListener("prm-ingelogd", function () { synchroniseer(); });
+  if (typeof window.PRM_TOKEN === "function") { synchroniseer(); }
 })();
 </script>
 </body>
