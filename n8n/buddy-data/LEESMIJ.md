@@ -40,11 +40,21 @@ weg naar deze tabellen; alles loopt via n8n. De afscherming zit daarmee in de
 database zelf en niet in een filter dat iemand kan omzeilen. **Achteraf is dit
 niet meer om te zetten**, dus kies hem meteen goed.
 
+> **Let op — dit kost anders een ronde.** Twee van de drie schrijfnodes doen
+> *invoegen-of-bijwerken*. Dat kan PostgreSQL alleen als er een **unieke** index
+> op de botsingskolom ligt. Een kolom op *verplicht* zetten is niet genoeg: je
+> moet er apart een index bij maken met de optie **uniek** aan. Vergeet je dat,
+> dan blijven `gebruikers` en `gesprekken` leeg terwijl de tool verder gewoon
+> werkt, en staat er in de uitvoering een 400 met de melding *"there is no unique
+> or exclusion constraint matching the ON CONFLICT specification"*.
+>
+> Doe het meteen bij het aanmaken, zolang de tabellen nog leeg zijn.
+
 **`gebruikers`**
 
 | kolom | type | opmerking |
 |---|---|---|
-| `entra_oid` | text | verplicht, uniek — hierop koppel je |
+| `entra_oid` | text | verplicht, **unieke index** — hierop koppel je |
 | `naam` | text | |
 | `email` | text | |
 | `laatst_actief` | timestamptz | |
@@ -53,7 +63,7 @@ niet meer om te zetten**, dus kies hem meteen goed.
 
 | kolom | type | opmerking |
 |---|---|---|
-| `sessie_id` | text | verplicht, uniek — de `sessionId` van de pagina |
+| `sessie_id` | text | verplicht, **unieke index** — de `sessionId` van de pagina |
 | `entra_oid` | text | van wie het gesprek is |
 | `titel` | text | de eerste vraag, afgekapt |
 | `bijgewerkt` | timestamptz | |
@@ -62,7 +72,7 @@ niet meer om te zetten**, dus kies hem meteen goed.
 
 | kolom | type | opmerking |
 |---|---|---|
-| `beurt_id` | text | verplicht, uniek — de `beurtId` van de pagina |
+| `beurt_id` | text | verplicht — de `beurtId` van de pagina |
 | `sessie_id` | text | |
 | `entra_oid` | text | |
 | `vraag` | text | |
@@ -71,8 +81,9 @@ niet meer om te zetten**, dus kies hem meteen goed.
 | `forum` | jsonb | het hele overleg |
 | `klaar_op` | timestamptz | |
 
-Zet een **index** op `beurten.beurt_id` (daar wordt elke paar seconden op
-gezocht tijdens het peilen), op `beurten.sessie_id` en op `gesprekken.entra_oid`.
+Zet daarnaast een **gewone** index op `beurten.beurt_id` (daar wordt elke paar
+seconden op gezocht tijdens het peilen), op `beurten.sessie_id` en op
+`gesprekken.entra_oid` — die laatste voor het ophalen van iemands gesprekken.
 
 Wat er bewust **niet** in gaat: de tekst van meegestuurde bestanden. Die hoort bij
 die ene vraag en heeft in een archief niets te zoeken.
@@ -110,12 +121,29 @@ hangen daar alle drie achter en draaien naast elkaar.
 | **Gebruiker vastleggen** | houdt `gebruikers` bij |
 | **Gesprek bijwerken** | houdt `gesprekken` bij |
 
-Op *Gebruiker vastleggen* en *Gesprek bijwerken* staat **On Error** op
-*Continue*. Dat is opzet: gaat de administratie mis, dan mag dat het antwoord aan
-de gebruiker nooit kosten. Op *Beurt wegschrijven* staat dat juist níét — als die
-rij er niet komt, vindt de peiling hem nooit en blijft de gebruiker wachten.
+| **Administratie mislukt** | vangt de fouten van die twee op |
 
-Verwijder daarna de oude Excel-nodes en de werkmap.
+Op *Gebruiker vastleggen* en *Gesprek bijwerken* staat **On Error** op *Continue
+(using error output)*, en die foutuitgang gaat naar **Administratie mislukt**.
+Dat is opzet, met een reden aan twee kanten: gaat de administratie mis, dan mag
+dat het antwoord aan de gebruiker nooit kosten — maar het mag ook niet ongemerkt
+gebeuren. Met een eigen foutuitgang zie je op het canvas en in de uitvoering dat
+er iets strandde, en heb je een plek om later een melding aan te hangen.
+
+Op *Beurt wegschrijven* staat geen foutafhandeling. Daar is stilte juist fout:
+komt die rij er niet, dan vindt de peiling hem nooit en blijft de gebruiker
+wachten. Die mág de uitvoering laten mislukken.
+
+Verwijder daarna in PRM 1 de oude nodes *Resultaat klaarzetten* en *Resultaat
+wegschrijven*, en haal de credential van Microsoft Excel uit n8n weg — dan hangt
+er niets meer aan een persoonlijk account. Archiveer de werkmap `Resultaten.xlsx`
+in plaats van hem te verwijderen: zolang de nieuwe route niet een paar weken
+gedraaid heeft, is dat je enige terugvalpositie.
+
+De beschrijving van de oude Excel-route stond in `n8n/LEESMIJ.md`,
+`n8n/nodes-voor-hoofdflow.json` en `n8n/resultaat-ophalen.json`. Die zijn
+verwijderd zodra deze route werkte; ze staan nog in de git-historie, mocht je ze
+ooit willen terugzien.
 
 ## Stap 4 — PRM 3 laten lezen
 

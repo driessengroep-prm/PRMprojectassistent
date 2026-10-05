@@ -38,7 +38,7 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput"
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -130,7 +130,18 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput"
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        520,
+        30
+      ],
+      "id": "d4000000-0000-4000-8000-000000000013",
+      "name": "Administratie mislukt"
     }
   ],
   "connections": {
@@ -149,6 +160,30 @@
           },
           {
             "node": "Gesprek bijwerken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gebruiker vastleggen": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Administratie mislukt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gesprek bijwerken": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Administratie mislukt",
             "type": "main",
             "index": 0
           }
