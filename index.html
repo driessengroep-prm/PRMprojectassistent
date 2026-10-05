@@ -1868,11 +1868,14 @@
     return losseTekst || "";
   }
 
-  function opslaan() {
-    if (!gesprek || !opslagWerkt) { return; }
-    gesprek.bijgewerkt = Date.now();
+  // Welk gesprek je bewaart mag je meegeven: een laat antwoord hoort bij de
+  // vraag die erbij staat, niet bij wat er nu toevallig openstaat.
+  function opslaan(welk) {
+    var g = welk || gesprek;
+    if (!g || !opslagWerkt) { return; }
+    g.bijgewerkt = Date.now();
     try {
-      Opslag.schrijf(gesprek);
+      Opslag.schrijf(g);
     } catch (e) {
       opslagWerkt = false;
       toonStoring("Dit gesprek kon niet worden bewaard",
@@ -2789,14 +2792,22 @@
     });
   }
 
+  // Geeft { belofte, stop } terug. Dat stoppen is geen franje: zonder dat
+  // tikte de peiling gewoon door nadat het wachten al was afgelopen - de
+  // verzending kon meteen afgewezen zijn, maar PRM 3 kreeg nog twintig
+  // minuten lang elke dertig seconden een verzoek. Dat is zichtbaar in de
+  // uitvoeringen van n8n en het kost tokens aan niets.
   function peilen(resultaatUrl, beurtId, autorisatie) {
     var start = Date.now();
     var kopregels = autorisatie ? { Authorization: autorisatie } : {};
 
     var missers = 0;
+    var gestopt = false;
+    var wekker = null;
 
-    return new Promise(function (klaar, mislukt) {
+    var belofte = new Promise(function (klaar, mislukt) {
       function nogEens() {
+        if (gestopt) { return; }
         var verstreken = Date.now() - start;
         if (verstreken > PEIL_MAX) {
           var op = new Error("na twintig minuten was er nog geen antwoord");
@@ -2804,7 +2815,7 @@
           mislukt(op);
           return;
         }
-        setTimeout(kijken, peiltempo(verstreken));
+        wekker = setTimeout(kijken, peiltempo(verstreken));
       }
 
       // Mislukte peiling: doorgaan tenzij het er te veel achter elkaar zijn, of
@@ -2822,12 +2833,14 @@
       }
 
       function kijken() {
+        if (gestopt) { return; }
         var scheider = resultaatUrl.indexOf("?") === -1 ? "?" : "&";
         fetch(resultaatUrl + scheider + "beurtId=" + encodeURIComponent(beurtId), {
           method: "GET",
           headers: kopregels
         })
           .then(function (res) {
+            if (gestopt) { return null; }
             if (!res.ok) {
               var pech = new Error("de resultaat-URL antwoordde met status " + res.status);
               pech.status = res.status;
@@ -2837,6 +2850,7 @@
             return res.json();
           })
           .then(function (data) {
+            if (gestopt) { return; }
             var d = uitpakken(data);
             if (d.status === "fout") {
               var gemeld = new Error(d.melding || "zonder nadere toelichting");
@@ -2852,6 +2866,7 @@
             nogEens();    // nog bezig
           })
           .catch(function (fout) {
+            if (gestopt) { return; }
             if (fout.vanWorkflow) { mislukt(fout); return; }
             hapering(fout);
           });
@@ -2859,6 +2874,13 @@
 
       nogEens();
     });
+
+    return {
+      belofte: belofte,
+      // Na stoppen komt de belofte nooit meer aan; dat hoort ook niet meer,
+      // want er wacht niemand meer op. Alles wat nog liep hoort te zwijgen.
+      stop: function () { gestopt = true; clearTimeout(wekker); }
+    };
   }
 
   // ---------------------------------------------------------------- versturen
@@ -2945,6 +2967,7 @@
     });
 
     var wachten;
+    var peiling = null;
     if (resultaatUrl) {
       // Met een resultaat-URL doet het antwoord op deze POST er niet toe. Bij
       // een lange vraag verbreekt de gateway van n8n Cloud die verbinding toch
@@ -2955,9 +2978,10 @@
       // Eén ding mag niet verdwijnen: gaat het verzoek er meteen al uit, dan
       // is er echt iets mis (verkeerd wachtwoord, workflow niet actief) en
       // heeft peilen geen zin. Dat gaat hieronder langs de peiling heen.
+      peiling = peilen(resultaatUrl, beurtId, kopregels.Authorization);
       wachten = Promise.race([
         vroegeAfwijzing(verzending, begonnen),
-        peilen(resultaatUrl, beurtId, kopregels.Authorization)
+        peiling.belofte
       ]);
     } else {
       // Zonder resultaat-URL blijft het bij één verzoek: de chat trigger moet
@@ -2982,14 +3006,19 @@
         });
     }
 
+    // Bij welk gesprek deze vraag hoort. Een lang antwoord kan binnenkomen
+    // nadat je een ander gesprek hebt opengeklapt; zonder dit zou het daar
+    // belanden - op het scherm en in de opslag.
+    var voorGesprek = gesprek;
+
     wachten
       .then(function (r) {
-        toonAntwoord(r.forum, r.advies);
-        gesprek.beurten.push({
+        if (gesprek === voorGesprek) { toonAntwoord(r.forum, r.advies); }
+        voorGesprek.beurten.push({
           vraag: tekst, forum: r.forum || null, advies: r.advies,
           bijlagen: bijlageNamen.length ? bijlageNamen : undefined
         });
-        opslaan();
+        opslaan(voorGesprek);
       })
       .catch(function (fout) {
         // Kwam er een statuscode terug, dan heeft het verzoek n8n bereikt en
@@ -3052,6 +3081,10 @@
         toonStoring("Het antwoord kwam niet binnen", uitleg);
       })
       .then(function () {
+        // Wie er ook won, de peiling heeft niets meer te zoeken. Dit is de
+        // enige plek waar dat zeker gebeurt, dus hij staat hier en niet in
+        // een van de twee takken hierboven.
+        if (peiling) { peiling.stop(); }
         knop.disabled = false;
         invoer.focus();
       });
