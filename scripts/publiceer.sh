@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Zet de Projectenassistent op prm-projectassistent.driessengroep.nl. Wordt door GitHub
-# Actions gedraaid, maar werkt ook vanaf een laptop met SSH-toegang tot de VM.
+# Actions gedraaid.
+#
+# De sleutel van de Action mag op de VM alleen rsync doen binnen /data/caddy/apps
+# (rrsync in authorized_keys). rrsync leest een pad dat met / begint vanaf die map, dus
+# /prm-projectassistent/ is /data/caddy/apps/prm-projectassistent/. Met een gewone sleutel
+# vanaf een laptop wijst dat pad naar de root van de server en faalt het; dat is de bedoeling.
 #
 # Alleen wat de browser nodig heeft gaat mee: index.html en de avatars.
 # index.html gaat als laatste, zodat de browser nooit een pagina krijgt die naar
@@ -8,7 +13,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DOEL="buddy-admin@40.115.59.118:/data/caddy/apps/prm-projectassistent/"
+DOEL="buddy-admin@40.115.59.118:/prm-projectassistent/"
 
 # De vier webhook-adressen gaan hier de pagina in, uit de omgeving. Ze staan
 # dus niet in de repository, die openbaar is. Is er niets meegegeven, dan
