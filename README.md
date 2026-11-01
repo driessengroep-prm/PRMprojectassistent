@@ -84,18 +84,13 @@ en dat hoeft niet meer. De velden voor gebruiker en wachtwoord zijn er ook uit:
 *Basic Auth* is vervangen door de controle bij Microsoft, die weet wié je bent in
 plaats van alleen dat je een wachtwoord kent.
 
-Overschrijven kan nog wel, via de adresbalk:
+Overschrijven via de adresbalk (`?webhook=`, `?resultaat=`, `?verwijder=`,
+`?lijst=`) kan **niet meer**. Elk verzoek naar deze adressen draagt het
+Microsoft-token van de medewerker, dus een link met `?lijst=https://aanvaller...`
+stuurde dat token na het inloggen naar een willekeurige server. Een ander adres
+gaat alleen via opnieuw publiceren.
 
-```
-prm-projectassistent.driessengroep.nl/?webhook=https://...
-```
-
-Dat werkt ook met `?resultaat=`, `?verwijder=` en `?lijst=`, en wint van wat is
-meegebakken. Handig om even een tweede workflow te proberen, en het luik voor als
-er een secret verkeerd staat — daarmee is de tool aan de praat zonder opnieuw te
-publiceren.
-
-De volgorde is: adresbalk, dan wat is meegebakken, en pas daarna wat er nog in de
+De volgorde is: wat is meegebakken, en pas daarna wat er nog in de
 browser staat van vroeger. Die laatste staat met opzet onderaan: je kunt hem
 nergens meer zien of wissen, dus een oud adres daar zou het juiste stilletjes
 overstemmen en dan werkt de tool voor iedereen behalve die ene collega.

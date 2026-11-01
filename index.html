@@ -663,12 +663,8 @@
    *  voordat ze iets doen. Wie het adres vindt maar geen inlog van       *
    *  Driessen heeft, krijgt een 401 en verder niets.                     *
    *                                                                     *
-   *  Zijn ze bij het publiceren niet ingevuld, dan blijven de velden     *
-   *  leeg en plak je de adressen zelf onder Instellingen. Zo werkt de    *
-   *  pagina ook rechtstreeks uit de repository.                          *
-   *                                                                     *
-   *  Volgorde: ?webhook=... in de adresbalk wint van wat er onthouden    *
-   *  is, en dat wint weer van wat hier is meegegeven.                    *
+   *  Zijn ze bij het publiceren niet ingevuld, dan valt de pagina terug  *
+   *  op wat er nog in deze browser onthouden is (zie Adres).             *
    * ------------------------------------------------------------------ */
   var STANDAARD = {
     webhook: "__PRM_WEBHOOK__",
@@ -825,8 +821,8 @@
    *  bij het publiceren in de pagina komen: niemand hoeft meer iets in   *
    *  te stellen, en het wissen van site-gegevens kost je ze niet meer.   *
    *                                                                     *
-   *  Volgorde: de adresbalk wint, dan wat is meegegeven bij het          *
-   *  publiceren, en pas daarna wat er nog in deze browser staat.         *
+   *  Volgorde: wat is meegegeven bij het publiceren, en pas daarna wat   *
+   *  er nog in deze browser staat.                                       *
    *                                                                     *
    *  Die volgorde is met opzet anders dan vroeger. Wat onthouden is kun  *
    *  je nu nergens meer zien of wissen; stond daar een oud adres in, dan *
@@ -835,15 +831,14 @@
    *  staan, zodat wie hem eerder zelf plakte niet stilvalt als er bij    *
    *  het publiceren een adres ontbreekt.                                 *
    *                                                                     *
-   *  De adresbalk is het luik voor als er iets misgaat: met             *
-   *  ?webhook=... komt de tool aan de praat zonder opnieuw te            *
-   *  publiceren.                                                         *
+   *  De adresbalk telt bewust niet mee. Elk verzoek naar deze adressen   *
+   *  draagt het Microsoft-token van de medewerker; een link met          *
+   *  ?lijst=https://aanvaller... liet dat token naar een willekeurige    *
+   *  server gaan. Een ander adres kan alleen via opnieuw publiceren.     *
    * ------------------------------------------------------------------ */
   var Adres = (function () {
-    var vraag = new URLSearchParams(location.search);
-
     function bepaal(naam, onthouden) {
-      return (vraag.get(naam) || "").trim() || standaard(naam) || onthouden();
+      return standaard(naam) || onthouden();
     }
 
     return {
